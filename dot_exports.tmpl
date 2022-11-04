@@ -41,4 +41,6 @@ export NODE_VERSIONS="$NVM_DIR/versions/node"
 
 export ITERM2_SQUELCH_MARK=1
 
-export RBENV_ROOT=/usr/local/var/rbenv
+{{- if eq .location "work" }}
+  export RBENV_ROOT=/usr/local/var/rbenv
+{{- end }}
