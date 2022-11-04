@@ -23,6 +23,8 @@ Plug 'junegunn/fzf.vim'
 
 Plug 'tpope/vim-rails'
 
+Plug 'preservim/nerdtree'
+
 Plug 'neoclide/coc.nvim', { 'branch': 'release' }
 
 " Initialize plugin system
@@ -31,6 +33,8 @@ call plug#end()
 " You can revert the settings after the call like so:
 "   filetype indent off   " Disable file-type-specific indentation
 "   syntax off            " Disable syntax highlighting
+
+runtime! init/**.vim
 
 autocmd vimenter * ++nested colorscheme gruvbox
 
