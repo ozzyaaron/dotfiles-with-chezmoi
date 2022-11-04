@@ -33,3 +33,6 @@ test -e "${HOME}/.iterm2_shell_integration.zsh" && source "${HOME}/.iterm2_shell
 eval "$(direnv hook zsh)"
 
 eval "$(rbenv init - zsh)"
+
+# Return terminal to "emacs" mode so ctrl+a, ctrl+k etc work
+bindkey -e
