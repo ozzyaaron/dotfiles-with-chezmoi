@@ -71,3 +71,6 @@ vnoremap J :m '>+1<CR>gv=gv
 inoremap <C-k> :m .-2<CR>==
 nnoremap <leader>j :m .+1<CR>==
 nnoremap <leader>k :m .-2<CR>==
+
+" FZF
+nnoremap <silent> <leader>f :Files<CR>
