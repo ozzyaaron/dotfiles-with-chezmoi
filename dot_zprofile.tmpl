@@ -1,0 +1,5 @@
+{{- if eq .location "work" }}
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+{{- if eq .location "work" }}
+  eval "$(`which brew` shellenv)"
+{{- end }
