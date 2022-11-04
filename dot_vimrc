@@ -18,6 +18,7 @@ call plug#begin()
 
 Plug 'morhetz/gruvbox'
 
+Plug 'mileszs/ack.vim'
 Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
 Plug 'junegunn/fzf.vim'
 

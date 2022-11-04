@@ -74,3 +74,6 @@ nnoremap <leader>k :m .-2<CR>==
 
 " FZF
 nnoremap <silent> <leader>f :Files<CR>
+
+" Cmd-Shift-F searches the whole project
+map <D-F> :Ack<Space>
