@@ -41,9 +41,12 @@ export ITERM2_SQUELCH_MARK=1
 {{- if eq .location "work" }}
 export RBENV_ROOT=/usr/local/var/rbenv
 export PATH=/usr/local/Cellar/bin:$PATH
+# Disable errors like
+# objc[864]: +[__NSCFConstantString initialize] may have been in progress in another thread when fork() was called
+export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
 {{- else if eq .location "home" }}
 export PATH=/opt/homebrew/bin:$PATH
 {{- end }}
 
 # Use Homebrew's OpenSSL when building Rubys
-export RUBY_CONFIGURE_OPTS="--with-openssl-dir=$(`which brew` --prefix openssl@1.1)"
+export RUBY_CONFIGURE_OPTS="--with-openssl-dir=$(`which brew` --prefix openssl@1.1)"`
