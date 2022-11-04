@@ -1,4 +1,17 @@
-export ITERM2_SQUELCH_MARK=1
+if [ -f ~/.aliases ]; then
+  source ~/.aliases
+fi
+
+# AUTOCOMPLETION
+# initialize autocompletion
+autoload -U compinit && compinit
+
+# history setup
+setopt SHARE_HISTORY
+HISTFILE=$HOME/.zhistory
+SAVEHIST=1000
+HISTSIZE=999
+setopt HIST_EXPIRE_DUPS_FIRST
 
 if [ $TERM_PROGRAM != "Apple_Terminal" ]; then
   eval "$(oh-my-posh init zsh)"
@@ -6,9 +19,6 @@ fi
 
 test -e "${HOME}/.iterm2_shell_integration.zsh" && source "${HOME}/.iterm2_shell_integration.zsh"
 
-export NODE_VERSION_PREFIX=v
-export NVM_DIR="$HOME/.nvm"
-export NODE_VERSIONS="$NVM_DIR/versions/node"
 
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 

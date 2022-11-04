@@ -1,0 +1,44 @@
+# Make vim the default editor
+export EDITOR="mvim -f";
+export BUNDLE_EDITOR="mvim -f";
+
+# Larger bash history (allow 32³ entries; default is 500)
+export HISTSIZE=32768;
+export HISTFILESIZE=$HISTSIZE;
+export HISTCONTROL=ignoredups;
+# Make some commands not show up in history
+export HISTIGNORE="ls:cd:cd -:pwd:exit:date:* --help";
+
+LANG="en_US.UTF-8"
+LC_COLLATE="en_US.UTF-8"
+LC_CTYPE="en_US.UTF-8"
+LC_MESSAGES="en_US.UTF-8"
+LC_MONETARY="en_US.UTF-8"
+LC_NUMERIC="en_US.UTF-8"
+LC_TIME="en_US.UTF-8"
+LC_ALL="en_US.UTF-8"
+export LANG LC_COLLATE LC_CTYPE LC_MESSAGES LC_MONETARY LC_NUMERIC LC_TIME LC_ALL
+
+# Highlight section titles in manual pages
+export LESS_TERMCAP_md="${yellow}";
+
+# Don’t clear the screen after quitting a manual page
+export MANPAGER="less -X";
+
+# Link Homebrew casks in `/Applications` rather than `~/Applications`
+export HOMEBREW_CASK_OPTS="--appdir=/Applications";
+
+# Enable warnings for Ruby 2.7.2
+#export RUBYOPT='-W:deprecated -W:experimental'
+
+# Postgres Configuration for interexchange/services container
+export PGHOST="localhost"
+export PGUSER="postgres"
+
+export NODE_VERSION_PREFIX=v
+export NVM_DIR="$HOME/.nvm"
+export NODE_VERSIONS="$NVM_DIR/versions/node"
+
+export ITERM2_SQUELCH_MARK=1
+
+export RBENV_ROOT=/usr/local/var/rbenv
