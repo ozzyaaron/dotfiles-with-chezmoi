@@ -2,7 +2,6 @@ scriptencoding utf-8
 
 set guifont=MesloLGM\ Nerd\ Font\ Mono:h18
 set guioptions-=T               " Remove GUI toolbar
-set guioptions-=e               " Use text tab bar, not GUI
 set guioptions-=rL              " Remove scrollbars
 set guicursor=a:blinkon0        " Turn off the blinking cursor
 set visualbell                  " Suppress audio/visual error bell
