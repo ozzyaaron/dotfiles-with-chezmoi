@@ -1,6 +1,3 @@
-let mapleader = ","
-let maplocalleader = ";"
-
 " Gracefully handle holding shift too long after : for common commands
 cabbrev W w
 cabbrev Q q
