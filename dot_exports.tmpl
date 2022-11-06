@@ -38,9 +38,12 @@ export NODE_VERSIONS="$NVM_DIR/versions/node"
 
 export ITERM2_SQUELCH_MARK=1
 
-# Use Homebrew's OpenSSL when building Rubys
-export RUBY_CONFIGURE_OPTS="--with-openssl-dir=$(brew --prefix openssl@1.1)"
-
 {{- if eq .location "work" }}
-  export RBENV_ROOT=/usr/local/var/rbenv
+export RBENV_ROOT=/usr/local/var/rbenv
+export PATH=/usr/local/Cellar/bin:$PATH
+{{- else if eq .location "home" }}
+export PATH=/opt/homebrew/bin:$PATH
 {{- end }}
+
+# Use Homebrew's OpenSSL when building Rubys
+export RUBY_CONFIGURE_OPTS="--with-openssl-dir=$(`which brew` --prefix openssl@1.1)"
