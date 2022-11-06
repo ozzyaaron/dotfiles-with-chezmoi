@@ -28,6 +28,7 @@ Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
 Plug 'junegunn/fzf.vim'
 
 Plug 'tpope/vim-rails'
+Plug 'tpope/vim-fugitive'
 
 Plug 'preservim/nerdtree'
 Plug 'preservim/nerdcommenter'

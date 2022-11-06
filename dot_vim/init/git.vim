@@ -1,2 +1,2 @@
 " Git blame
-map <leader>g   :Gblame<CR>
+map <leader>g   :Git blame<CR>
