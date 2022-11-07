@@ -26,6 +26,7 @@ Plug 'morhetz/gruvbox'
 Plug 'mileszs/ack.vim'
 Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
 Plug 'junegunn/fzf.vim'
+Plug 'dense-analysis/ale'
 
 Plug 'tpope/vim-rails'
 Plug 'tpope/vim-fugitive'
