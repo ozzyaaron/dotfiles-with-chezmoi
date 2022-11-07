@@ -1,1 +1,5 @@
+function smart_git_push() {
+  git push --set-upstream origin `git symbolic-ref --short HEAD`
+}
+
 source ~/.functions_heroku;
