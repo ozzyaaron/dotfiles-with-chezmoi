@@ -29,6 +29,7 @@ Plug 'junegunn/fzf.vim'
 Plug 'dense-analysis/ale'
 
 Plug 'tpope/vim-rails'
+Plug 'tpope/vim-endwise'
 Plug 'tpope/vim-fugitive'
 
 Plug 'preservim/nerdtree'
