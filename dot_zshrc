@@ -1,3 +1,6 @@
+# For profiling
+#zmodload zsh/zprof
+
 if [ -f ~/.aliases ]; then
   source ~/.aliases
 fi
@@ -36,3 +39,6 @@ setopt EXTENDED_HISTORY
 # autocompletion using arrow keys (based on history)
 bindkey '\e[A' history-search-backward
 bindkey '\e[B' history-search-forward
+
+# For profiling
+#zprof
