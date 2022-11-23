@@ -10,6 +10,7 @@ alias gpush="git push"
 alias gdm='git branch --merged master | grep -v "\\*\\|master" | xargs -n 1 git branch -d'
 alias gpu="smart_git_push"
 alias gap="git add -p"
+alias gane="git commit --amend --no-edit"
 alias ftail="tail -f -n 500"
 alias wipit="git add -A && git ci -m 'WIP [ci skip]'"
 
