@@ -28,25 +28,14 @@ export MANPAGER="less -X";
 # Link Homebrew casks in `/Applications` rather than `~/Applications`
 export HOMEBREW_CASK_OPTS="--appdir=/Applications";
 
-# Postgres Configuration for interexchange/services container
-export PGHOST="localhost"
-export PGUSER="postgres"
-
 export NODE_VERSION_PREFIX=v
 export NVM_DIR="$HOME/.nvm"
 export NODE_VERSIONS="$NVM_DIR/versions/node"
 
 export ITERM2_SQUELCH_MARK=1
 
-{{- if eq .location "work" }}
-export RBENV_ROOT=/usr/local/var/rbenv
-export PATH=/usr/local/bin:$PATH
-# Disable errors like
-# objc[864]: +[__NSCFConstantString initialize] may have been in progress in another thread when fork() was called
-export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
-{{- else if eq .location "home" }}
 export PATH=/opt/homebrew/bin:$PATH
-{{- end }}
+export PATH=/opt/homebrew/opt/postgresql@13/bin:$PATH
 
 # Use Homebrew's OpenSSL when building Rubys
 export RUBY_CONFIGURE_OPTS="--with-openssl-dir=$(`which brew` --prefix openssl@1.1)"
