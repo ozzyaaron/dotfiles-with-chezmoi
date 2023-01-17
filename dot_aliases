@@ -18,4 +18,4 @@ alias be="bundle exec"
 
 alias cddotfiles="cd ~/src/`whoami`/dotfiles/"
 
-source ~/.aliases_interexchange;
+source ~/.aliases_work;

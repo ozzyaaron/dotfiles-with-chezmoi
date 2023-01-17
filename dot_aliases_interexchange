@@ -1,7 +1,0 @@
-alias cdapp="cd ~/src/interexchange/app/"
-alias cdengineering="cd ~/src/interexchange/engineering.interexchange.org/"
-alias cdpassport="cd ~/src/interexchange/passport/"
-alias cdstyleguide="cd ~/src/interexchange/styleguide"
-alias cdwebsite="cd ~/src/interexchange/website/"
-alias cdservices="cd ~/src/interexchange/services/"
-alias cdcampminder="cd ~/src/interexchange/campminder"
