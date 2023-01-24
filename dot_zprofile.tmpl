@@ -1,5 +1,5 @@
-{{- if eq .location "home" -}}
-eval "$(/opt/homebrew/bin/brew shellenv)"
-{{- else if eq .location "work" -}}
 eval "$(`which brew` shellenv)"
-{{- end -}}
+
+# PATH needs to be set in zprofile in order to not be overridden by /etc/zprofile
+#
+export PATH=/opt/homebrew/opt/openssl@3/bin:$PATH
