@@ -18,4 +18,6 @@ alias be="bundle exec"
 
 alias cddotfiles="cd ~/src/`whoami`/dotfiles/"
 
+alias ctags="`brew --prefix`/bin/ctags"
+
 source ~/.aliases_work;
