@@ -36,6 +36,9 @@ export ITERM2_SQUELCH_MARK=1
 
 export PATH=/opt/homebrew/bin:$PATH
 export PATH=/opt/homebrew/opt/postgresql@13/bin:$PATH
+export PATH="$(brew --prefix openssl@1.1)/bin:$PATH"
+export LIBRARY_PATH="$LIBRARY_PATH:$(brew --prefix openssl@1.1)/lib/"
 
 # Use Homebrew's OpenSSL when building Rubys
-export RUBY_CONFIGURE_OPTS="--with-openssl-dir=$(`which brew` --prefix openssl@1.1)"
+export RUBY_CONFIGURE_OPTS="--with-openssl-dir=$(brew --prefix openssl@1.1)"
+export PKG_CONFIG_PATH="$(brew --prefix openssl@1.1)/lib/pkgconfig"
