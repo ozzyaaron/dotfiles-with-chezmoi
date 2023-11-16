@@ -1,5 +1,4 @@
 {
-  "diagnostic.displayByAle": true,
   "codeLens.enable": true,
   "solargraph.useBundler": true
 }
