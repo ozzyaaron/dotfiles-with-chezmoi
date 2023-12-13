@@ -7,10 +7,17 @@ alias -- -="cd -"
 
 alias gpull="git pull"
 alias gpush="git push"
+alias gfp="git push --force-with-lease"
 alias gdm='git branch --merged master | grep -v "\\*\\|master" | xargs -n 1 git branch -d'
 alias gpu="smart_git_push"
 alias gap="git add -p"
 alias gcane="git commit --amend --no-edit"
+alias gca="git commit --amend"
+alias gmrt="git_most_recent_tag"
+alias grbsc="git rebase --show-current-patch"
+alias grbc="git rebase --continue"
+alias grbsk="git rebase --skip"
+
 alias ftail="tail -f -n 500"
 alias wipit="git add -A && git ci -m 'WIP [ci skip]'"
 
