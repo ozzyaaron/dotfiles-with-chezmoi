@@ -1,1 +1,2 @@
 alias cdjp="cd ~/src/jane-pos/"
+alias gdtbr="git br | grep -vE 'ozzyaaron|master$|production' | xargs git br -D"
