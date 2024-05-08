@@ -13,7 +13,7 @@ set ttimeoutlen=100             " Keep the timeout very short
 set showcmd                     " Show typed command prefixes while waiting for operator
 set mouse=a                     " Use mouse support in XTerm/iTerm.
 
-set colorcolumn=100 " show a marker at 100 char width
+set colorcolumn=120 " show a marker at 120 char width
 
 " Show relative and absolute line numbers
 set relativenumber
