@@ -11,7 +11,7 @@ alt - s: yabai -m display --focus west
 alt - g: yabai -m display --focus east
 
 # rotate layout clockwise
-shift + alt - r : yabai -m space --rotate 270
+#shift + alt - r : yabai -m space --rotate 270
 
 # flip along y-axis
 shift + alt - y : yabai -m space --mirror y-axis
@@ -23,16 +23,16 @@ shift + alt - x : yabai -m space --mirror x-axis
 shift + alt - t : yabai -m window --toggle float --grid 4:4:1:1:2:2
 
 # maximize a window
-shift + alt - m : yabai -m window --toggle zoom-fullscreen
+shift + ctrl - m : yabai -m window --toggle zoom-fullscreen
 
 # balance out tree of windows (resize to occupy same area)
 shift + alt - e : yabai -m space --balance
 
 # swap windows
-shift + alt - j : yabai -m window --swap south
-shift + alt - k : yabai -m window --swap north
-shift + alt - h : yabai -m window --swap west
-shift + alt - l : yabai -m window --swap east
+shift + ctrl - j : yabai -m window --swap south
+shift + ctrl - k : yabai -m window --swap north
+shift + ctrl - h : yabai -m window --swap west
+shift + ctrl - l : yabai -m window --swap east
 
 # move window and split
 ctrl + alt - j : yabai -m window --warp south
@@ -41,12 +41,12 @@ ctrl + alt - h : yabai -m window --warp west
 ctrl + alt - l : yabai -m window --warp east
 
 # move window to display left and right
-shift + alt - s : yabai -m window --display west; yabai -m display --focus west;
-shift + alt - g : yabai -m window --display east; yabai -m display --focus east;
+#shift + ctrl - s : yabai -m window --display west; yabai -m display --focus west;
+#shift + ctrl - g : yabai -m window --display east; yabai -m display --focus east;
 
 #move window to prev and next space
-shift + alt - p : yabai -m window --space prev;
-shift + alt - n : yabai -m window --space next;
+shift + ctrl - p : yabai -m window --space prev;
+shift + ctrl - n : yabai -m window --space next;
 
 # move window to space #
 shift + alt - 1 : yabai -m window --space 1;
@@ -58,6 +58,20 @@ shift + alt - 6 : yabai -m window --space 6;
 shift + alt - 7 : yabai -m window --space 7;
 
 # stop/start/restart yabai
-ctrl + alt - q : brew services stop yabai
-ctrl + alt - s : brew services start yabai
-ctrl + alt - r : brew services restart yabai
+#ctrl + alt - q : brew services stop yabai
+#ctrl + alt - s : brew services start yabai
+#ctrl + alt - r : brew services restart yabai
+
+# modify split % of window
+#shift + ctrl - s : yabai -m window --ratio rel:0.2
+
+
+# Open my PRs in github
+shift + ctrl - g : open "https://github.com/janetechinc/jane-pos/pulls/ozzyaaron"
+
+# Allow window resizing
+shift + alt - r : yabai -m window --ratio rel:-0.2
+
+# Control Spotify
+#alt - F5 (0x60) : play/pause
+shift + ctrl - s : osascript -e 'tell application "Spotify" to playpause'

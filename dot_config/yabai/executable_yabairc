@@ -34,4 +34,3 @@ yabai -m rule --add app="^1Password$" manage=off
 yabai -m rule --add app="^Activity Monitor$" manage=off
 yabai -m rule --add app="^Monosnap$" manage=off
 yabai -m rule --add app="^FileMerge$" manage=off
-yabai -m rule --add app="^Pastebot$" manage=off
