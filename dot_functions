@@ -1,3 +1,7 @@
 function smart_git_push() {
   git push --set-upstream origin `git symbolic-ref --short HEAD`
 }
+
+function git_most_recent_tag() {
+  git checkout $(git describe --tags $(git rev-list --tags --max-count=1))
+}

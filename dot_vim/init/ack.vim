@@ -1,4 +1,5 @@
-let g:ackprg = "ag --vimgrep"
+" Search hidden folders & files but still uses .gitignore
+let g:ackprg = "ag --vimgrep --hidden --ignore .git"
 
 " Auto close the Quickfix list after pressing '<enter>' on a list item
 "let g:ack_autoclose = 1
@@ -12,6 +13,8 @@ cnoreabbrev Ack Ack!
 " Maps <leader>/ so we're ready to type the search keyword
 nnoremap <Leader>/ :Ack!<Space>
 " }}}
+
+nnoremap <Leader><Space> :Ack!<Space>
 
 " Navigate quickfix list with ease
 nnoremap <silent> [q :cprevious<CR>

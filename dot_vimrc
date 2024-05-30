@@ -22,6 +22,7 @@ call plug#begin()
 " Make sure you use single quotes
 
 Plug 'morhetz/gruvbox'
+Plug 'vim-airline/vim-airline'
 
 Plug 'mileszs/ack.vim'
 Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
@@ -41,6 +42,8 @@ Plug 'godlygeek/tabular'
 Plug 'mattn/emmet-vim'
 
 Plug 'neoclide/coc.nvim', { 'branch': 'release' }
+
+Plug 'christoomey/vim-tmux-navigator'
 
 " Initialize plugin system
 " - Automatically executes `filetype plugin indent on` and `syntax enable`.
