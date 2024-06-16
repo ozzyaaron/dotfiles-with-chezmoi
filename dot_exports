@@ -1,6 +1,6 @@
 # Make vim the default editor
-# export EDITOR="mvim -f";
-# export BUNDLE_EDITOR="mvim -f";
+ export EDITOR="vim";
+ export BUNDLE_EDITOR="vim";
 
 # Larger bash history (allow 32³ entries; default is 500)
 export HISTSIZE=32768;
