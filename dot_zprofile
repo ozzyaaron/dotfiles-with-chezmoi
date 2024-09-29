@@ -1,4 +1,7 @@
-eval "$(`which brew` shellenv)"
+for file in ~/.{path,exports,aliases,functions,extra,rbenvrc}; do
+  [ -r "$file" ] && [ -f "$file" ] && source "$file";
+done;
+unset file;
 
 # This resolves the default node version
 #DEFAULT_NODE_VER="$((cat "$NVM_DIR/alias/default" || cat ~/.nvmrc) 2> /dev/null)"
