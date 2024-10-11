@@ -13,21 +13,33 @@ return {
   opts = function(plugin, opts)
      -- insert "rubocop" into our list of servers
     opts.servers = opts.servers or {}
-    table.insert(opts.servers, "rubocop_lsp")
+    --table.insert(opts.servers, "rubocop")
+    table.insert(opts.servers, "solargraph")
 
     opts.config = require("astrocore").extend_tbl(opts.config or {}, {
       -- this must be a function to get access to the `lspconfig` module
-      rubocop_lsp = {
-        --args = { "exec", "rubocop", "--format", "json", "--stdin", "$FILENAME" },
-        cmd = { "bundle", "exec", "rubocop", "--lsp" },  -- Runs RuboCop LSP via bundler
-        filetypes = { "ruby" },  -- Apply only to Ruby files
-        root_dir = require("lspconfig.util").root_pattern("Gemfile", ".rubocop.yml", ".git"),
+      --rubocop = {
+        --cmd = { "bundle", "exec", "rubocop", "--lsp" },  -- Runs RuboCop LSP via bundler
+        --filetypes = { "ruby" },  -- Apply only to Ruby files
+        --root_dir = require("lspconfig.util").root_pattern("Gemfile", ".rubocop.yml", ".git"),
+        --settings = {
+          --ruby = {
+            --formatting = true,  -- Enable auto-formatting
+            --linting = true,     -- Enable linting
+          --},
+        --},
+      --},
+      solargraph = {
+        cmd = { "bundle", "exec", "solargraph", "stdio" },
+        filetypes = { "ruby" },
+        root_dir = require("lspconfig.util").root_pattern("Gemfile", ".git", "."),
         settings = {
-          ruby = {
-            formatting = true,  -- Enable auto-formatting
-            linting = true,     -- Enable linting
+          solargraph = {
+            diagnostics = true,
+            formatting = false,  -- Enable formatting if needed
           },
         },
+        capabilities = require("cmp_nvim_lsp").default_capabilities(),
       },
     })
   end,
