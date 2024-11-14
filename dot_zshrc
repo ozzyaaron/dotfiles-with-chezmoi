@@ -44,6 +44,9 @@ bindkey '\e[B' history-search-forward
 # For profiling
 #zprof
 
+# ctrlk for tmux
+bindkey \^K kill-line
+
 plugins=(nvm)
 
 # ---- FZF -----
