@@ -4,5 +4,7 @@ return {
     name = "vim-rails",
     opts = {
     },
+    config = function ()
+    end,
   },
 }
