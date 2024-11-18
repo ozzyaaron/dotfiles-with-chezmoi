@@ -11,5 +11,6 @@ return {
   { import = "astrocommunity.colorscheme.catppuccin" },
   { import = "astrocommunity.editing-support.nvim-treesitter-endwise" },
   { import = "astrocommunity.editing-support.auto-save-nvim" },
+  { import = "astrocommunity.diagnostics.trouble-nvim" },
   -- import/override with your plugins folder
 }
