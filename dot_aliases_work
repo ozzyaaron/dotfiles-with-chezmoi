@@ -1,4 +1,3 @@
 alias cdjp="cd ~/src/jane-pos/"
 alias gdtbrdr="git br | grep -vE 'ozzyaaron|master$|production|edge|staging'"
 alias gdtbr="git br | grep -vE 'ozzyaaron|master$|production|edge' | xargs git br -D"
-alias gcoi='git checkout $(git branch | fzf)'

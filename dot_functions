@@ -5,3 +5,11 @@ function smart_git_push() {
 function git_most_recent_tag() {
   git checkout $(git describe --tags $(git rev-list --tags --max-count=1))
 }
+
+gcoi() {
+  local branch
+  branch=$(git branch | fzf -q "$1" | sed "s/^\*? *//")
+  if [ -n "$branch" ]; then
+      git checkout $(echo "$branch")
+  fi
+}
