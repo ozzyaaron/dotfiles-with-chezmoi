@@ -8,7 +8,16 @@ return {
         n = {
           -- second key is the lefthand side of the map
           -- mappings seen under group name "Buffer"
-          ["<Leader>f"] = { function() require("telescope.builtin").find_files() end, desc = "Find files" },
+          ["<leader>fe"] = {
+            function()
+              require("telescope.builtin").find_files {
+                prompt_title = "Config Files",
+                cwd = vim.fn.stdpath "config",
+                hidden = true,
+              }
+            end,
+            desc = "Find config files",
+          },
           ["<Leader>bn"] = { "<cmd>tabnew<cr>", desc = "New tab" },
           ["<Leader>bD"] = {
             function()
