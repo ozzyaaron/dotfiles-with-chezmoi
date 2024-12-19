@@ -16,6 +16,10 @@ return {
     --table.insert(opts.servers, "rubocop")
     table.insert(opts.servers, "solargraph")
 
+    opts.mason = opts.mason or {}
+    opts.mason.disabled_servers = opts.mason.disabled_servers or {}
+    table.insert(opts.mason.disabled_servers, "solargraph")
+
     opts.config = require("astrocore").extend_tbl(opts.config or {}, {
       -- this must be a function to get access to the `lspconfig` module
       --rubocop = {
@@ -35,11 +39,20 @@ return {
         root_dir = require("lspconfig.util").root_pattern("Gemfile", ".git", "."),
         settings = {
           solargraph = {
+            completion = true,
             diagnostics = true,
             formatting = false,  -- Enable formatting if needed
+            hover = true,
           },
         },
         capabilities = require("cmp_nvim_lsp").default_capabilities(),
+        flags = {
+          debounce_text_changes = 150,
+        },
+        on_attach = function(client, bufnr)
+          vim.api.nvim_buf_set_option(bufnr, 'omnifunc', 'v:lua.vim.lsp.omnifunc')
+          print("Solargraph LSP attached!")
+        end,
       },
     })
   end,
