@@ -33,16 +33,13 @@ return {
     },
     -- enable servers that you already have installed without mason
     servers = {
-      "solargraph",
+      "ruby_lsp",
     },
     -- customize language server configuration options passed to `lspconfig`
     ---@diagnostic disable: missing-fields
     config = {
-      solargraph = {
-        cmd = { "bundle", "exec", "solargraph", "stdio" },
-        init_options = {
-          formatting = false,
-        },
+      ruby_lsp = {
+        cmd = { "bundle", "exec", "ruby-lsp" },
       },
     },
     -- customize how language servers are attached
