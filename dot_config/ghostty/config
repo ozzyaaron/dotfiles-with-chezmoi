@@ -1,16 +1,7 @@
 background = black
 window-colorspace = display-p3
 
-# Colors seemed washed out, this fixes it a bit
-# Also colors were just wrong sometimes like a green for success would be yellow!
-#
-# https://github.com/ghostty-org/ghostty/discussions/3470
-#
-palette = 04=#5763e1
-palette = 06=#49a3b0
-palette = 12=#0435f0
-palette = 14=#69e2e4
-
+theme = synthwave
 
 font-family = MesloLGM Nerd Font Mono
 font-size = 16
