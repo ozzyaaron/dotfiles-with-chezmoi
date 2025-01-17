@@ -1,3 +1,7 @@
+-- This is setup via astolsp as its using standard nvim-lspconfig now
+--
+if true then return {} end -- WARN: REMOVE THIS LINE TO ACTIVATE THIS FILE
+
 return {
   -- Configure lspconfig
   -- {
