@@ -41,8 +41,8 @@ export PATH="$(brew --prefix openssl@1.1)/bin:$PATH"
 export LIBRARY_PATH="$LIBRARY_PATH:$(brew --prefix openssl@1.1)/lib/"
 
 # For building with rbenv including jemalloc and other inputs from homebrew
-export CPPFLAGS="$CPPFLAGS -I $HOMEBREW_PREFIX/include"
-export LDFLAGS="$LDFLAGS -L $HOMEBREW_PREFIX/lib"
+export CPPFLAGS="$CPPFLAGS -I $(brew --prefix jemalloc)/include"
+export LDFLAGS="$LDFLAGS -L $(brew --prefix jemalloc)/lib"
 
 # Ruby building options
 export RUBY_CONFIGURE_OPTS="--with-jemalloc --with-openssl-dir=$(brew --prefix openssl@1.1)"
