@@ -15,10 +15,4 @@ return {
     opts = {},
     config = function() end,
   },
-  {
-    'christoomey/vim-tmux-navigator',
-    name = 'vim-tmux-navigator',
-    opts = {},
-    config = function() end,
-  },
 }
