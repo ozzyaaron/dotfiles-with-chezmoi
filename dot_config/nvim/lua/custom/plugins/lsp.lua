@@ -120,7 +120,11 @@ return {
       cmd = { 'bundle', 'exec', 'ruby-lsp' }, -- Ensure `ruby-lsp` runs with Bundler
       on_attach = on_attach,
       capabilities = capabilities,
-      init_options = {},
+      init_options = {
+        enabledFeatures = {
+          documentHighlights = false,
+        },
+      },
       settings = {
         -- Add any Ruby LSP-specific settings here.
       },
