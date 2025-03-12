@@ -12,7 +12,11 @@ return {
   {
     'pocco81/auto-save.nvim',
     name = 'auto-save.nvim',
-    opts = {},
-    config = function() end,
+    opts = {
+      debounce_delay = 5000,
+    },
+    config = function(_, opts)
+      require("auto-save").setup(opts)
+    end
   },
 }
