@@ -2,7 +2,7 @@ return {
   {
     'okuuva/auto-save.nvim',
     opts = {
-      debounce_delay: 2000,
+      debounce_delay = 2000,
     },
   },
 }
