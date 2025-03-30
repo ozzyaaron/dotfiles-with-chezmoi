@@ -4,27 +4,27 @@ return {
     event = 'InsertEnter',
     dependencies = {
       {
-        'L3MON4D3/LuaSnip',
-        build = (function()
-          -- Build Step is needed for regex support in snippets.
-          -- This step is not supported in many windows environments.
-          -- Remove the below condition to re-enable on windows.
-          if vim.fn.has 'win32' == 1 or vim.fn.executable 'make' == 0 then
-            return
-          end
-          return 'make install_jsregexp'
-        end)(),
-        dependencies = {
-          {
-            'rafamadriz/friendly-snippets',
-            config = function()
-              require('luasnip.loaders.from_vscode').lazy_load()
-              require('luasnip').filetype_extend("ruby", {"rails"})
-            end,
-          },
-        },
+        -- 'L3MON4D3/LuaSnip',
+        -- build = (function()
+        --   -- Build Step is needed for regex support in snippets.
+        --   -- This step is not supported in many windows environments.
+        --   -- Remove the below condition to re-enable on windows.
+        --   if vim.fn.has 'win32' == 1 or vim.fn.executable 'make' == 0 then
+        --     return
+        --   end
+        --   return 'make install_jsregexp'
+        -- end)(),
+        -- dependencies = {
+        --   {
+        --     'rafamadriz/friendly-snippets',
+        --     config = function()
+        --       require('luasnip.loaders.from_vscode').lazy_load()
+        --       require('luasnip').filetype_extend("ruby", {"rails"})
+        --     end,
+        --   },
+        -- },
       },
-      'saadparwaiz1/cmp_luasnip',
+      -- 'saadparwaiz1/cmp_luasnip',
       'hrsh7th/cmp-nvim-lsp',
       'hrsh7th/cmp-path',
       'hrsh7th/cmp-buffer',
@@ -32,18 +32,18 @@ return {
     config = function()
       -- See `:help cmp`
       local cmp = require 'cmp'
-      local luasnip = require 'luasnip'
-      luasnip.config.setup {}
+      -- local luasnip = require 'luasnip'
+      -- luasnip.config.setup {}
 
       cmp.setup {
-        snippet = {
-          expand = function(args)
-            luasnip.lsp_expand(args.body)
-          end,
-        },
+        -- snippet = {
+        --   expand = function(args)
+        --     luasnip.lsp_expand(args.body)
+        --   end,
+        -- },
         completion = {
-          autocomplete = false,
           completeopt = 'menu,menuone,noinsert',
+          max_item_count = 10,
         },
 
         -- For an understanding of why these mappings were
@@ -51,19 +51,15 @@ return {
         --
         -- No, but seriously. Please read `:help ins-completion`, it is really good!
         mapping = cmp.mapping.preset.insert {
-          -- attempting to unmap for cmp to allow access to avante but its not working yet
-          -- ['<C-y>'] = function(fallback)
-          --   fallback()
-          -- end,
           -- -- Select the [n]ext item
-          -- -- ['<Tab>'] = cmp.mapping.select_next_item({ behavior = cmp.SelectBehavior.Insert }),
-          ['<Tab>'] = cmp.mapping(function()
-            if cmp.visible() then
-              cmp.select_next_item({ behavior = cmp.SelectBehavior.Insert })
-            else
-              cmp.complete()
-            end
-          end, { 'i', 's' }),
+          ['<Tab>'] = cmp.mapping.select_next_item({ behavior = cmp.SelectBehavior.Insert }),
+          -- ['<Tab>'] = cmp.mapping(function()
+          --   if cmp.visible() then
+          --     cmp.select_next_item({ behavior = cmp.SelectBehavior.Insert })
+          --   else
+          --     cmp.complete()
+          --   end
+          -- end, { 'i', 's' }),
           -- Select the [p]revious item
           ['<S-Tab>'] = cmp.mapping.select_prev_item({ behavior = cmp.SelectBehavior.Insert }),
 
@@ -105,17 +101,22 @@ return {
         },
         sources = {
           {
-            name = 'lazydev',
-            -- set group index to 0 to skip loading LuaLS completions as lazydev recommends it
-            group_index = 0,
+            name = "copilot",
           },
+          -- {
+          --   name = 'lazydev',
+          --   -- set group index to 0 to skip loading LuaLS completions as lazydev recommends it
+          --   group_index = 0,
+          -- },
           {
             name = 'nvim_lsp',
             keyword_length = 2,
+            max_item_count = 5,
           },
           {
             name = 'buffer',
             keyword_length = 2,
+            max_item_count = 5,
             -- Attempt to get complete from all open buffers
             option = {
               get_bufnrs = function()
@@ -123,8 +124,11 @@ return {
               end
             },
           },
-          { name = 'path' },
-          { name = 'luasnip' },
+          {
+            name = 'path',
+            max_item_count = 5,
+          },
+          -- { name = 'luasnip' },
         },
       }
     end,
