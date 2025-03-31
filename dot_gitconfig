@@ -174,3 +174,5 @@
   format = ssh
 [fetch]
 	prune = true
+[branch]
+	sort = -committerdate
