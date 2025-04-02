@@ -14,7 +14,8 @@ return {
   {
     'neovim/nvim-lspconfig',
     dependencies = {
-      'hrsh7th/cmp-nvim-lsp',
+      -- 'hrsh7th/cmp-nvim-lsp',
+      'saghen/blink.cmp',
       { 'j-hui/fidget.nvim', opts = {} },
     },
     config = function()
@@ -126,8 +127,9 @@ return {
         -- (Optional) Set up buffer-local keymaps or commands here.
       end
 
-      local capabilities = vim.lsp.protocol.make_client_capabilities()
-      capabilities = require('cmp_nvim_lsp').default_capabilities(capabilities)
+      -- local capabilities = vim.lsp.protocol.make_client_capabilities()
+      local capabilities = require('blink.cmp').get_lsp_capabilities()
+      -- capabilities = require('cmp_nvim_lsp').default_capabilities(capabilities)
 
       lspconfig.ruby_lsp.setup {
         cmd = { 'bundle', 'exec', 'ruby-lsp' }, -- Ensure `ruby-lsp` runs with Bundler

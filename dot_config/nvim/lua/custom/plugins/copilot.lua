@@ -17,6 +17,7 @@ return {
   },
   {
     "zbirenbaum/copilot-cmp",
+    enabled = false,
     after = {
       "copilot.lua",
       "nvim-cmp",
