@@ -15,17 +15,17 @@ return {
       })
     end,
   },
-  {
-    "zbirenbaum/copilot-cmp",
-    enabled = false,
-    after = {
-      "copilot.lua",
-      "nvim-cmp",
-    },
-    config = function()
-      require("copilot_cmp").setup()
-    end
-  },
+  -- {
+  --   "zbirenbaum/copilot-cmp",
+  --   enabled = false,
+  --   after = {
+  --     "copilot.lua",
+  --     "nvim-cmp",
+  --   },
+  --   config = function()
+  --     require("copilot_cmp").setup()
+  --   end
+  -- },
   {
     "CopilotC-Nvim/CopilotChat.nvim",
     dependencies = {
