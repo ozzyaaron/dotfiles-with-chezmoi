@@ -1,0 +1,28 @@
+[profile jane-pos-staging]
+sso_start_url = https://d-90676c205e.awsapps.com/start
+sso_region = us-east-1
+sso_account_id = 073962030457
+sso_role_name = JanePOSEngineerNonProdAccess
+region = us-east-1
+output = json
+[profile jane-pos-edge]
+sso_start_url = https://d-90676c205e.awsapps.com/start
+sso_region = us-east-1
+sso_account_id = 538893501348
+sso_role_name = JanePOSEngineerNonProdAccess
+region = us-east-1
+output = json
+[profile jane-pos-demo]
+sso_start_url = https://d-90676c205e.awsapps.com/start
+sso_region = us-east-1
+sso_account_id = 083650480120
+sso_role_name = JanePOSEngineerNonProdAccess
+region = us-east-1
+output = json
+[profile jane-pos-production]
+sso_start_url = https://d-90676c205e.awsapps.com/start
+sso_region = us-east-1
+sso_account_id = 228087463429
+sso_role_name = JanePOSEngineerProdAccess
+region = us-east-1
+output = json
