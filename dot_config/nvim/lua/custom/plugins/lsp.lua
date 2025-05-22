@@ -17,8 +17,21 @@ return {
       -- 'hrsh7th/cmp-nvim-lsp',
       'saghen/blink.cmp',
       { 'j-hui/fidget.nvim', opts = {} },
+      "williamboman/mason.nvim",
+      "williamboman/mason-lspconfig.nvim",
     },
     config = function()
+      require("mason").setup()
+      require("mason-lspconfig").setup({
+        ensure_installed = {
+          "ts_ls",
+          "cucumber_language_server",
+          "cssls",
+          "html",
+        },
+        automatic_installation = false,
+      })
+
       vim.api.nvim_create_autocmd('LspAttach', {
         group = vim.api.nvim_create_augroup('kickstart-lsp-attach', { clear = true }),
         callback = function(event)
@@ -146,6 +159,70 @@ return {
           -- Add any Ruby LSP-specific settings here.
         },
       }
-    end,
+
+      lspconfig.cucumber_language_server.setup {
+        on_attach = on_attach,
+        capabilities = capabilities,
+      }
+
+      lspconfig.ts_ls.setup {
+        on_attach = on_attach,
+        capabilities = capabilities,
+        settings = {
+          typescript = {
+            inlayHints = {
+              includeInlayParameterNameHints = 'all',
+              includeInlayParameterNameHintsWhenArgumentMatchesName = false,
+              includeInlayFunctionParameterTypeHints = true,
+              includeInlayVariableTypeHints = true,
+              includeInlayPropertyDeclarationTypeHints = true,
+              includeInlayFunctionLikeReturnTypeHints = true,
+              includeInlayEnumMemberValueHints = true,
+            }
+          },
+          javascript = {
+            inlayHints = {
+              includeInlayParameterNameHints = 'all',
+              includeInlayParameterNameHintsWhenArgumentMatchesName = false,
+              includeInlayFunctionParameterTypeHints = true,
+              includeInlayVariableTypeHints = true,
+              includeInlayPropertyDeclarationTypeHints = true,
+              includeInlayFunctionLikeReturnTypeHints = true,
+              includeInlayEnumMemberValueHints = true,
+            },
+          },
+        },
+      }
+
+      lspconfig.cssls.setup {
+        capabilities = capabilities,
+        on_attach = on_attach,
+        settings = {
+          css = {
+            validate = true,
+            lint = {
+                unknownAtRules = "ignore" -- Ignore unknown CSS rules (useful for Tailwind, etc.)
+            }
+          },
+          scss = {
+            validate = true,
+            lint = {
+              unknownAtRules = "ignore"
+            }
+          },
+          less = {
+            validate = true,
+            lint = {
+              unknownAtRules = "ignore"
+            }
+          }
+        },
+      }
+
+      lspconfig.html.setup {
+        capabilities = capabilities,
+        on_attach = on_attach,
+      }
+    end
   },
 }
