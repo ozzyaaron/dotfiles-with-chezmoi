@@ -49,4 +49,9 @@ return {
       },
     },
   },
+  { -- Add/change/delete surrounding characters
+    'kylechui/nvim-surround',
+    event = 'VeryLazy',
+    config = true,
+  },
 }
