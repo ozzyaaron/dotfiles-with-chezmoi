@@ -5,8 +5,10 @@ return {
     version = false, -- Never set this value to "*"! Never!
     opts = {
       provider = "copilot",
-      copilot = {
-        model = "gemini-2.0-flash-001",
+      providers = {
+        copilot = {
+          model = "gemini-2.0-flash-001",
+        },
       },
     },
     -- if you want to build from source then do `make BUILD_FROM_SOURCE=true`
