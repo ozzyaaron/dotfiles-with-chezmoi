@@ -7,7 +7,9 @@ return {
       provider = "copilot",
       providers = {
         copilot = {
-          model = "gemini-2.0-flash-001",
+          -- model = "gemini-2.0-flash-001",
+          model = "gemini-2.5-pro",
+          -- model = "claude-3.7-sonnet",
         },
       },
     },
