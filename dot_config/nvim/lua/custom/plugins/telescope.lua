@@ -53,8 +53,48 @@ return {
         --
         defaults = {
           file_ignore_patterns = { "vendor" },
+          -- Performance optimizations
+          dynamic_preview_title = true,
+          preview = {
+            timeout = 250,          -- Timeout for preview loading (ms)
+            filesize_limit = 2,     -- Preview files smaller than 2MB
+            highlight_limit = 0.5,  -- Highlight files smaller than 500KB
+          },
+          layout_config = {
+            horizontal = {
+              prompt_position = "top",
+              preview_width = 0.55,
+              results_width = 0.8,
+            },
+            vertical = {
+              mirror = false,
+            },
+            width = 0.87,
+            height = 0.80,
+            preview_cutoff = 120,
+          },
         },
-        -- pickers = {}
+        pickers = {
+          find_files = {
+            -- Performance optimizations for find_files
+            cache_picker = { num_pickers = 10 },
+            find_command = { "rg", "--files", "--hidden", "--glob", "!**/.git/*" },
+            follow = true,
+            hidden = false,
+            sorting_strategy = "ascending",
+            scroll_strategy = "cycle",
+            layout_config = {
+              prompt_position = "top",
+            },
+          },
+          buffers = {
+            sort_mru = true,
+            sort_lastused = true,
+          },
+          live_grep = {
+            only_sort_text = true,
+          },
+        },
         extensions = {
           ['ui-select'] = {
             require('telescope.themes').get_dropdown(),
