@@ -19,17 +19,33 @@ return {
           },
         },
         panel = { enabled = false },
+        copilot_node_command = 'node',
         server_opts_overrides = {
-          -- Disable copilot LSP functionality
-          trace = "off",
-          settings = {
-            advanced = {
-              listCount = 0, -- Disable completion list
-              inlineSuggestCount = 3,
-            }
-          }
-        }
+          name = nil,
+        },
       })
+
+      -- Override the LspRestart command to exclude copilot
+      vim.api.nvim_create_user_command('LspRestart', function(opts)
+        local clients = vim.lsp.get_clients()
+        for _, client in ipairs(clients) do
+          if client.name ~= 'copilot' then
+            if opts.args == "" or client.name == opts.args then
+              vim.lsp.stop_client(client.id, true)
+              vim.cmd('edit') -- Trigger LSP attach for current buffer
+            end
+          end
+        end
+      end, { nargs = '?', complete = function()
+        local clients = vim.lsp.get_clients()
+        local names = {}
+        for _, client in ipairs(clients) do
+          if client.name ~= 'copilot' then
+            table.insert(names, client.name)
+          end
+        end
+        return names
+      end })
     end,
   },
   -- {
