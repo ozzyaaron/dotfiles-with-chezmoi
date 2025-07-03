@@ -162,7 +162,24 @@ return {
           },
         },
         settings = {
-          -- Add any Ruby LSP-specific settings here.
+          rubyLsp = {
+            featuresConfiguration = {
+              inlayHint = {
+                enableAll = false,
+              },
+            },
+            -- Exclude common directories that don't need indexing
+            indexing = {
+              excludedPatterns = {
+                "**/node_modules/**",
+                "**/tmp/**",
+                "**/log/**",
+                "**/coverage/**",
+                "**/vendor/**",
+                "**/.git/**",
+              },
+            },
+          },
         },
       }
 
