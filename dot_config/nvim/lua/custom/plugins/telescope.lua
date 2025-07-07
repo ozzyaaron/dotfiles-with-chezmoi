@@ -81,7 +81,7 @@ return {
             find_command = { "rg", "--files", "--hidden", "--glob", "!**/.git/*" },
             follow = true,
             hidden = false,
-            sorting_strategy = "ascending",
+            sorting_strategy = "descending",
             scroll_strategy = "cycle",
             layout_config = {
               prompt_position = "bottom",
