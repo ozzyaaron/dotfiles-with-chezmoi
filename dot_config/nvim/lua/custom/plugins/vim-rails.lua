@@ -7,14 +7,12 @@ return {
       -- Add view component projections
       vim.g.rails_projections = {
         -- View Component class files
-        ["app/components/*_component.rb"] = {
+        ["app/components/*.rb"] = {
           command = "component",
           related = "app/components/{}.html.erb",
           alternate = "spec/components/{}_spec.rb",
           template = {
-            "# frozen_string_literal: true",
-            "",
-            "class {camelcase|capitalize|colons}Component < ViewComponent::Base",
+            "class {camelcase|capitalize|colons}Component < ApplicationComponent",
             "  def initialize",
             "    super",
             "  end",
@@ -24,21 +22,19 @@ return {
 
         -- View Component template files
         ["app/components/*.html.erb"] = {
-          related = "app/components/{}_component.rb",
-          alternate = "spec/components/{}_component_spec.rb"
+          related = "app/components/{}.rb",
+          alternate = "spec/components/{}_spec.rb"
         },
 
         -- View Component spec files
         ["spec/components/*_component_spec.rb"] = {
           command = "componentspec",
           related = "app/components/{}_component.rb",
-          alternate = "app/components/{}.html.erb",
+          alternate = "app/components/{}_component.html.erb",
           template = {
-            "# frozen_string_literal: true",
-            "",
             "require 'rails_helper'",
             "",
-            "RSpec.describe {camelcase|capitalize|colons}Component, type: :component do",
+            "describe {camelcase|capitalize|colons}Component do",
             "  it 'renders' do",
             "    render_inline(described_class.new)",
             "    expect(page).to have_text('')",
@@ -48,21 +44,21 @@ return {
         },
 
         -- Nested view components (admin/, shared/, etc.)
-        ["app/components/*/*_component.rb"] = {
+        ["app/components/*/*.rb"] = {
           command = "component",
           related = "app/components/{dirname}/{basename}.html.erb",
           alternate = "spec/components/{dirname}/{basename}_spec.rb"
         },
 
         ["app/components/*/*.html.erb"] = {
-          related = "app/components/{dirname}/{basename}_component.rb",
-          alternate = "spec/components/{dirname}/{basename}_component_spec.rb"
+          related = "app/components/{dirname}/{basename}.rb",
+          alternate = "spec/components/{dirname}/{basename}_spec.rb"
         },
 
         ["spec/components/*/*_component_spec.rb"] = {
           command = "componentspec",
           related = "app/components/{dirname}/{basename}_component.rb",
-          alternate = "app/components/{dirname}/{basename}.html.erb"
+          alternate = "app/components/{dirname}/{basename}_component.html.erb"
         }
       }
     end,
