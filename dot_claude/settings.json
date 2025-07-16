@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/aarontodd/.claude/focus-tmux.sh"
+            "command": "~/.claude/focus-tmux.sh"
           }
         ]
       }
