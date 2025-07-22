@@ -152,6 +152,40 @@ return {
       capabilities.general = capabilities.general or {}
       capabilities.general.positionEncodings = { 'utf-16' }
 
+      -- Enhanced capabilities for better completion details and signatures
+      capabilities.textDocument = capabilities.textDocument or {}
+      capabilities.textDocument.completion = capabilities.textDocument.completion or {}
+      capabilities.textDocument.completion.completionItem = {
+        documentationFormat = { "markdown", "plaintext" },
+        snippetSupport = true,
+        preselectSupport = true,
+        insertReplaceSupport = true,
+        labelDetailsSupport = true,
+        deprecatedSupport = true,
+        commitCharactersSupport = true,
+        tagSupport = { valueSet = { 1 } },
+        resolveSupport = {
+          properties = {
+            "documentation",
+            "detail",
+            "additionalTextEdits",
+            "labelDetails",
+          },
+        },
+      }
+
+      -- Enable signature help capabilities
+      capabilities.textDocument.signatureHelp = {
+        dynamicRegistration = false,
+        signatureInformation = {
+          documentationFormat = { "markdown", "plaintext" },
+          parameterInformation = {
+            labelOffsetSupport = true,
+          },
+          activeParameterSupport = true,
+        },
+      }
+
       lspconfig.ruby_lsp.setup {
         cmd = { 'bundle', 'exec', 'ruby-lsp' }, -- Ensure `ruby-lsp` runs with Bundler
         on_attach = on_attach,
