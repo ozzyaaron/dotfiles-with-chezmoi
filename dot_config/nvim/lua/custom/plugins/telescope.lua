@@ -140,6 +140,13 @@ return {
         }
       end, { desc = '[S]earch [/] in Open Files' })
 
+      -- Search word under cursor in current file only
+      vim.keymap.set('n', '<leader>fwf', function()
+        builtin.current_buffer_fuzzy_find {
+          default_text = vim.fn.expand('<cword>')
+        }
+      end, { desc = 'Find [W]ord in current [F]ile' })
+
       -- Shortcut for searching your Neovim configuration files
       vim.keymap.set('n', '<leader>fc', function()
         builtin.find_files { cwd = vim.fn.stdpath 'config' }
