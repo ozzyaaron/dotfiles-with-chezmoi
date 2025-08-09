@@ -191,6 +191,19 @@ vim.keymap.set('n', '<C-l>', '<C-w><C-l>', { desc = 'Move focus to the right win
 vim.keymap.set('n', '<C-j>', '<C-w><C-j>', { desc = 'Move focus to the lower window' })
 vim.keymap.set('n', '<C-k>', '<C-w><C-k>', { desc = 'Move focus to the upper window' })
 
+-- Toggle zoom: maximize current window or restore equal splits
+local zoom_state = false
+vim.keymap.set('n', '<leader>z', function()
+  if zoom_state then
+    vim.cmd('wincmd =')  -- Restore equal splits
+    zoom_state = false
+  else
+    vim.cmd('wincmd |')  -- Maximize width
+    vim.cmd('wincmd _')  -- Maximize height
+    zoom_state = true
+  end
+end, { desc = 'Toggle window zoom' })
+
 -- [[ Basic Autocommands ]]
 --  See `:help lua-guide-autocommands`
 
