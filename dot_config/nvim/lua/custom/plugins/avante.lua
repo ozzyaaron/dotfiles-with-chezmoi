@@ -1,15 +1,22 @@
 return {
   {
    "yetone/avante.nvim",
+    enabled = true,
     event = "VeryLazy",
     version = false, -- Never set this value to "*"! Never!
     opts = {
       provider = "copilot",
       providers = {
+        claude = {
+          model = "claude-sonnet-4",
+          -- model = "claude-2",
+          -- model = "claude-instant-100k",
+          -- model = "claude-instant-1",
+        },
         copilot = {
           -- model = "gemini-2.0-flash-001",
-          model = "gemini-2.5-pro",
-          -- model = "claude-3.7-sonnet",
+          -- model = "gemini-2.5-pro",
+          -- model = "claude-sonnet-4",
         },
       },
     },

@@ -8,3 +8,6 @@ vim.opt.softtabstop = 2   -- Number of spaces for a tab while editing
 -- Try to prevent tabstop and other overrides
 vim.opt.modeline = false
 vim.g.editorconfig = false
+
+vim.opt.foldmethod = 'indent'
+vim.opt.foldenable = false

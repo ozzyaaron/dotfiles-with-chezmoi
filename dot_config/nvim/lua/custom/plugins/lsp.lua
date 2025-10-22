@@ -14,7 +14,6 @@ return {
   {
     'neovim/nvim-lspconfig',
     dependencies = {
-      -- 'hrsh7th/cmp-nvim-lsp',
       'saghen/blink.cmp',
       { 'j-hui/fidget.nvim', opts = {} },
       "williamboman/mason.nvim",
@@ -29,7 +28,7 @@ return {
           "cssls",
           "html",
         },
-        automatic_installation = false,
+        automatic_enabled = false,
       })
 
       vim.api.nvim_create_autocmd('LspAttach', {
@@ -132,23 +131,60 @@ return {
         for type, icon in pairs(signs) do
           diagnostic_signs[vim.diagnostic.severity[type]] = icon
         end
-        vim.diagnostic.config { signs = { text = diagnostic_signs } }
+        vim.diagnostic.config {
+          signs = { text = diagnostic_signs },
+          virtual_text = {
+            spacing = 4,
+            source = "if_many",
+            prefix = '●',
+          },
+          float = {
+            source = "if_many",
+            border = "rounded",
+          },
+          underline = true,
+          update_in_insert = false,
+          severity_sort = true,
+        }
+      else
+        vim.diagnostic.config {
+          virtual_text = {
+            spacing = 4,
+            source = "if_many",
+            prefix = '●',
+          },
+          float = {
+            source = "if_many",
+            border = "rounded",
+          },
+          signs = true,
+          underline = true,
+          update_in_insert = false,
+          severity_sort = true,
+        }
       end
 
-      vim.diagnostic.config { virtual_text = true }
+      -- Add a keymap to show diagnostics in a floating window
+      vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float, { desc = 'Show diagnostic [E]rror' })
+      vim.keymap.set('n', '[d', vim.diagnostic.goto_prev, { desc = 'Go to previous diagnostic' })
+      vim.keymap.set('n', ']d', vim.diagnostic.goto_next, { desc = 'Go to next diagnostic' })
 
-      local lspconfig = require 'lspconfig'
-
-      local on_attach = function(client, bufnr)
-        -- print('Ruby LSP attached to buffer: ' .. bufnr)
-        -- (Optional) Set up buffer-local keymaps or commands here.
-      end
+      -- Force enable diagnostic handlers (in case they were disabled)
+      vim.lsp.handlers["textDocument/publishDiagnostics"] = vim.lsp.with(
+        vim.lsp.diagnostic.on_publish_diagnostics, {
+          virtual_text = {
+            spacing = 4,
+            source = "if_many",
+            prefix = '●',
+          },
+          signs = true,
+          underline = true,
+          update_in_insert = false,
+        }
+      )
 
       -- local capabilities = vim.lsp.protocol.make_client_capabilities()
       local capabilities = require('blink.cmp').get_lsp_capabilities()
-      -- capabilities = require('cmp_nvim_lsp').default_capabilities(capabilities)
-
-      -- Force UTF-16 encoding for all LSP clients to avoid conflicts with copilot
       capabilities.general = capabilities.general or {}
       capabilities.general.positionEncodings = { 'utf-16' }
 
@@ -186,101 +222,41 @@ return {
         },
       }
 
-      lspconfig.ruby_lsp.setup {
-        cmd = { 'bundle', 'exec', 'ruby-lsp' }, -- Ensure `ruby-lsp` runs with Bundler
-        on_attach = on_attach,
-        capabilities = capabilities,
-        init_options = {
-          enabledFeatures = {
-            documentHighlights = false,
-          },
-        },
-        settings = {
-          rubyLsp = {
-            featuresConfiguration = {
-              inlayHint = {
-                enableAll = false,
-              },
-            },
-            -- Exclude common directories that don't need indexing
-            indexing = {
-              excludedPatterns = {
-                "**/node_modules/**",
-                "**/tmp/**",
-                "**/log/**",
-                "**/coverage/**",
-                "**/vendor/**",
-                "**/.git/**",
-              },
+      vim.lsp.config("ruby_lsp",
+        {
+          cmd = { 'bundle', 'exec', 'ruby-lsp' }, -- Ensure `ruby-lsp` runs with Bundler
+          capabilities = capabilities,
+          init_options = {
+            enabledFeatures = {
+              documentHighlights = false,
+              diagnostics = true,
             },
           },
-        },
-      }
-
-      lspconfig.cucumber_language_server.setup {
-        on_attach = on_attach,
-        capabilities = capabilities,
-      }
-
-      -- Currently needs more setup as it was giving me feedback like 'const can't be used outside of typscript files'
-      -- lspconfig.ts_ls.setup {
-      --   on_attach = on_attach,
-      --   capabilities = capabilities,
-      --   settings = {
-      --     typescript = {
-      --       inlayHints = {
-      --         includeInlayParameterNameHints = 'all',
-      --         includeInlayParameterNameHintsWhenArgumentMatchesName = false,
-      --         includeInlayFunctionParameterTypeHints = true,
-      --         includeInlayVariableTypeHints = true,
-      --         includeInlayPropertyDeclarationTypeHints = true,
-      --         includeInlayFunctionLikeReturnTypeHints = true,
-      --         includeInlayEnumMemberValueHints = true,
-      --       }
-      --     },
-      --     javascript = {
-      --       inlayHints = {
-      --         includeInlayParameterNameHints = 'all',
-      --         includeInlayParameterNameHintsWhenArgumentMatchesName = false,
-      --         includeInlayFunctionParameterTypeHints = true,
-      --         includeInlayVariableTypeHints = true,
-      --         includeInlayPropertyDeclarationTypeHints = true,
-      --         includeInlayFunctionLikeReturnTypeHints = true,
-      --         includeInlayEnumMemberValueHints = true,
-      --       },
-      --     },
-      --   },
-      -- }
-
-      lspconfig.cssls.setup {
-        capabilities = capabilities,
-        on_attach = on_attach,
-        settings = {
-          css = {
-            validate = true,
-            lint = {
-                unknownAtRules = "ignore" -- Ignore unknown CSS rules (useful for Tailwind, etc.)
-            }
+          settings = {
+            rubyLsp = {
+              featuresConfiguration = {
+                inlayHint = {
+                  enableAll = false,
+                },
+              },
+              -- Exclude common directories that don't need indexing
+              indexing = {
+                excludedPatterns = {
+                  "**/node_modules/**",
+                  "**/tmp/**",
+                  "**/log/**",
+                  "**/coverage/**",
+                  "**/vendor/**",
+                  "**/.git/**",
+                },
+              },
+            },
           },
-          scss = {
-            validate = true,
-            lint = {
-              unknownAtRules = "ignore"
-            }
-          },
-          less = {
-            validate = true,
-            lint = {
-              unknownAtRules = "ignore"
-            }
-          }
-        },
-      }
+        }
+      )
 
-      lspconfig.html.setup {
-        capabilities = capabilities,
-        on_attach = on_attach,
-      }
-    end
+      vim.lsp.enable("ruby_lsp")
+      vim.lsp.enable("cucumber_language_server")
+    end,
   },
 }

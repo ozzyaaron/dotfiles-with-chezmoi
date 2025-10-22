@@ -34,45 +34,6 @@ return {
         nerd_font_variant = 'meslo-lg'
       },
 
-      -- Enable signature help to show function arguments
-      signature = {
-        enabled = true,
-        trigger = {
-          enabled = true,
-          show_on_trigger_character = true,  -- Show after typing '('
-          show_on_insert_on_trigger_character = true,
-        },
-        window = {
-          min_width = 1,
-          max_width = 100,
-          max_height = 10,
-          border = 'rounded',
-          winblend = 0,
-          winhighlight = 'Normal:BlinkCmpSignatureHelp,FloatBorder:BlinkCmpSignatureHelpBorder',
-          scrollbar = false,
-        },
-      },
-
-      -- (Default) Only show the documentation popup when manually triggered
-      completion = {
-        documentation = {
-          auto_show = false,
-          window = {
-            border = 'rounded',
-          },
-        },
-        -- Show more details in completion menu
-        menu = {
-          draw = {
-            -- Show function signatures and details in the completion menu
-            columns = {
-              { "label", "label_description", gap = 1 },
-              { "kind_icon", "kind" }
-            },
-          },
-        },
-      },
-
       -- Default list of enabled providers defined so that you can extend it
       -- elsewhere in your config, without redefining it, due to `opts_extend`
       sources = {

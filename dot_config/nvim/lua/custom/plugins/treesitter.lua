@@ -31,7 +31,7 @@ return {
       },
       indent = {
         enable = true,
-        -- disable = { 'ruby' },
+        disable = { 'ruby' },
       },
       textobjects = {
         select = {
