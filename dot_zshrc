@@ -95,7 +95,7 @@ _fzf_comprun() {
 }
 
 # Zoxide (better cd)
-[ -z "$DISABLE_ZOXIDE" ] && eval "$(zoxide init --cmd cd zsh)"]
+[ -z "$DISABLE_ZOXIDE" ] && eval "$(zoxide init --cmd cd zsh)"
 
 eval "$(rbenv init - zsh)"
 eval "$(/opt/homebrew/bin/brew shellenv)"
