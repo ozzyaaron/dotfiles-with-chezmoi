@@ -94,8 +94,10 @@ _fzf_comprun() {
   esac
 }
 
-# Zoxide (better cd)
-[ -z "$DISABLE_ZOXIDE" ] && eval "$(zoxide init --cmd cd zsh)"
+# Check if running interactively
+if [[ -o interactive ]]; then
+  eval "$(zoxide init zsh)"
+fi
 
 eval "$(rbenv init - zsh)"
 eval "$(/opt/homebrew/bin/brew shellenv)"
