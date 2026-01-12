@@ -1,7 +1,6 @@
 return {
   {
     'lewis6991/gitsigns.nvim',
-    disabled = true,
     opts = {
       on_attach = function(bufnr)
         local gitsigns = require 'gitsigns'
@@ -13,21 +12,21 @@ return {
         end
 
         -- Navigation
-        -- map('n', ']c', function()
-        --   if vim.wo.diff then
-        --     vim.cmd.normal { ']c', bang = true }
-        --   else
-        --     gitsigns.nav_hunk 'next'
-        --   end
-        -- end, { desc = 'Jump to next git [c]hange' })
-        --
-        -- map('n', '[c', function()
-        --   if vim.wo.diff then
-        --     vim.cmd.normal { '[c', bang = true }
-        --   else
-        --     gitsigns.nav_hunk 'prev'
-        --   end
-        -- end, { desc = 'Jump to previous git [c]hange' })
+        map('n', ']c', function()
+          if vim.wo.diff then
+            vim.cmd.normal { ']c', bang = true }
+          else
+            gitsigns.nav_hunk 'next'
+          end
+        end, { desc = 'Jump to next git [c]hange' })
+
+        map('n', '[c', function()
+          if vim.wo.diff then
+            vim.cmd.normal { '[c', bang = true }
+          else
+            gitsigns.nav_hunk 'prev'
+          end
+        end, { desc = 'Jump to previous git [c]hange' })
 
         -- Actions
         -- visual mode

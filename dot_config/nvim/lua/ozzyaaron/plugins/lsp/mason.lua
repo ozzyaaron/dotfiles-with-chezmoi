@@ -22,5 +22,8 @@ return {
   ensure_installed = {
     "lua_ls",
     "cucumber_language_server",
+    "gopls",
+    "typescript-language-server",
+    "vscode-langservers-extracted",
   },
 }
