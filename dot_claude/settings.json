@@ -15,5 +15,15 @@
         ]
       }
     ]
+  },
+  "permissons": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(tree:*)"
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "/Users/aarontodd/.claude/statusline-command.sh"
   }
 }
