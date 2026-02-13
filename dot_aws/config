@@ -26,3 +26,24 @@ sso_account_id = 228087463429
 sso_role_name = JanePOSEngineerProdAccess
 region = us-east-1
 output = json
+[profile CoreStagingAccount]
+sso_start_url = https://d-90676c205e.awsapps.com/start
+sso_region = us-east-1
+sso_account_id = 270276483342
+sso_role_name = JaneEngineerNonProdAccess
+region = us-east-1
+output = json
+[profile dmerch-edge]
+sso_start_url = https://d-90676c205e.awsapps.com/start
+sso_region = us-east-1
+sso_account_id = 748775436699
+sso_role_name = JaneDMtoDMNonProdAccess
+region = us-east-1
+output = json
+[profile dmerch-prod]
+sso_start_url = https://d-90676c205e.awsapps.com/start
+sso_region = us-east-1
+sso_account_id = 510074659415
+sso_role_name = JaneDMtoDMProdAccess
+region = us-east-1
+output = json
