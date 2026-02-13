@@ -13,11 +13,8 @@ map('n', ']d', vim.diagnostic.goto_next, { desc = 'Go to next diagnostic' })
 -- Exit terminal mode with a easier shortcut
 map('t', '<Esc><Esc>', '<C-\\><C-n>', { desc = 'Exit terminal mode' })
 
--- Window navigation (CTRL+hjkl to switch between windows)
-map('n', '<C-h>', '<C-w><C-h>', { desc = 'Move focus to the left window' })
-map('n', '<C-l>', '<C-w><C-l>', { desc = 'Move focus to the right window' })
-map('n', '<C-j>', '<C-w><C-j>', { desc = 'Move focus to the lower window' })
-map('n', '<C-k>', '<C-w><C-k>', { desc = 'Move focus to the upper window' })
+-- Window navigation handled by nvim-tmux-navigation plugin (CTRL+hjkl)
+-- Works for both Neovim splits and tmux panes seamlessly
 
 -- Open Neovim reference guide in default macOS app
 map('n', '<leader>?', function()
