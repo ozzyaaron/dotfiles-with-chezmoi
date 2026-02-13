@@ -8,7 +8,7 @@ alias -- -="cd -"
 alias gpull="git pull"
 alias gpush="git push"
 alias gfp="git push --force-with-lease"
-alias gdm='git branch --merged master | grep -v "\\*\\|master" | xargs -n 1 git branch -d'
+alias gdm='main_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed "s@^refs/remotes/origin/@@" || echo "main"); git branch | grep -v "^\*" | grep -v "^[[:space:]]*${main_branch}$" | while read branch; do if ! git cherry "$main_branch" "$branch" 2>/dev/null | grep -q "^+"; then read -p "Delete $branch? (y/n) " -n 1 -r; echo; if [[ $REPLY =~ ^[Yy]$ ]]; then git branch -d "$branch"; fi; fi; done'
 alias gpu="smart_git_push"
 alias gap="git add -p"
 alias gcane="git commit --amend --no-edit"
