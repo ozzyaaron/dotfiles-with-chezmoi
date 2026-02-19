@@ -3,6 +3,15 @@
   "env": {
     "DISABLE_ZOXIDE": "1"
   },
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(tree:*)",
+      "Bash(bin/rails:*)",
+      "Bash(bundle:*)",
+      "Bash(curl:*)"
+    ]
+  },
   "hooks": {
     "Stop": [
       {
@@ -18,16 +27,13 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "~/.claude/statusline-command.sh"
+    "command": "/Users/aarontodd/.claude/statusline-command.sh"
   },
   "enabledPlugins": {
-    "superpowers@claude-plugins-official": true
-  },
-  "permissons": {
-    "allow": [
-      "Bash(ls:*)",
-      "Bash(tree:*)"
-    ]
-  },
-  "model": "opus"
+    "superpowers@claude-plugins-official": true,
+    "context7@claude-plugins-official": true,
+    "code-review@claude-plugins-official": true,
+    "rust-analyzer-lsp@claude-plugins-official": true,
+    "gopls-lsp@claude-plugins-official": true
+  }
 }

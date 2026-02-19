@@ -162,7 +162,7 @@
 [user]
   name = Aaron Todd
   email = ozzyaaron@gmail.com
-	signingkey = ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGkNl9DMuK3t0IwLIhVzEbjE9EiJS/+1I793RpshVMFJ atodd@Aarons-MacBook-Pro.local\n
+	signingkey = ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGkNl9DMuK3t0IwLIhVzEbjE9EiJS/+1I793RpshVMFJ atodd@Aarons-MacBook-Pro.local
 
 [rerere]
   enabled = 1
@@ -176,3 +176,5 @@
 	prune = true
 [branch]
 	sort = -committerdate
+[init]
+	defaultBranch = main

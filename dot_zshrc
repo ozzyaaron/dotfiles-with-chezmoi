@@ -94,11 +94,17 @@ _fzf_comprun() {
   esac
 }
 
-# Check if running interactively
-if [[ -o interactive ]]; then
-  eval "$(zoxide init zsh)"
-fi
+# Zoxide (better cd)
+[ -z "$DISABLE_ZOXIDE" ] && eval "$(zoxide init --cmd cd zsh)"
 
 eval "$(rbenv init - zsh)"
 eval "$(/opt/homebrew/bin/brew shellenv)"
+export PATH="$HOME/.local/bin:$PATH"
+
+# bun completions
+[ -s "/Users/aarontodd/.bun/_bun" ] && source "/Users/aarontodd/.bun/_bun"
+
+# bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
 export PATH="$HOME/.local/bin:$PATH"
