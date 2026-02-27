@@ -13,17 +13,35 @@ fi
 
 test -e "${HOME}/.iterm2_shell_integration.zsh" && source "${HOME}/.iterm2_shell_integration.zsh"
 
-# Lazy-load NVM on first use of nvm/node/npm/npx (~350ms saved)
 export NVM_DIR="${HOME}/.nvm"
-_lazy_load_nvm() {
-  unset -f nvm node npm npx
-  [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
-  [ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"
+
+_nvm_load() {
+  [[ -n "$NVM_LOADED" ]] && return
+  [ -s "$HOMEBREW_PREFIX/opt/nvm/nvm.sh" ] && \. "$HOMEBREW_PREFIX/opt/nvm/nvm.sh"
+  [ -s "$HOMEBREW_PREFIX/opt/nvm/etc/bash_completion.d/nvm" ] && \. "$HOMEBREW_PREFIX/opt/nvm/etc/bash_completion.d/nvm"
+  NVM_LOADED=1
 }
-nvm()  { _lazy_load_nvm; nvm "$@"; }
-node() { _lazy_load_nvm; node "$@"; }
-npm()  { _lazy_load_nvm; npm "$@"; }
-npx()  { _lazy_load_nvm; npx "$@"; }
+
+# Lazy stub: only load nvm.sh on first explicit nvm call
+nvm() { _nvm_load; nvm "$@"; }
+
+# Auto-switch: only call nvm use when the nearest .nvmrc actually changes
+_nvm_current_nvmrc=""
+_nvm_auto_use() {
+  local dir="$PWD" nvmrc=""
+  while [[ "$dir" != "/" ]]; do
+    [[ -f "$dir/.nvmrc" ]] && nvmrc="$dir/.nvmrc" && break
+    dir="${dir:h}"
+  done
+  if [[ "$nvmrc" != "$_nvm_current_nvmrc" ]]; then
+    _nvm_current_nvmrc="$nvmrc"
+    [[ -n "$nvmrc" ]] && { _nvm_load; nvm use; }
+  fi
+}
+
+autoload -U add-zsh-hook
+add-zsh-hook chpwd _nvm_auto_use
+_nvm_auto_use
 
 eval "$(direnv hook zsh)"
 
