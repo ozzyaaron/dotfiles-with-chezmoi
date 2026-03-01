@@ -12,31 +12,33 @@ RESTORE_SCRIPT="$HOME/.claude/restore-tmux.sh"
 # Ensure temp directory exists
 mkdir -p "$TEMP_DIR"
 
-# Detect terminal application and check if it has focus
+# Detect terminal application using TERM_PROGRAM (set by the terminal that spawned this shell)
 TERMINAL_APP=""
-HAS_FOCUS=false
+TERMINAL_PROCESS_NAME=""
 
-if pgrep -f "iTerm" > /dev/null; then
-    TERMINAL_APP="com.googlecode.iterm2"
-    # Check if iTerm has focus
-    FOCUSED_APP=$(osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true')
-    if [[ "$FOCUSED_APP" == "iTerm2" ]]; then
-        HAS_FOCUS=true
-    fi
-elif pgrep -f "Terminal" > /dev/null; then
-    TERMINAL_APP="com.apple.Terminal"
-    # Check if Terminal has focus
-    FOCUSED_APP=$(osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true')
-    if [[ "$FOCUSED_APP" == "Terminal" ]]; then
-        HAS_FOCUS=true
-    fi
-else
-    # Default to Terminal.app
-    TERMINAL_APP="com.apple.Terminal"
-fi
+case "$TERM_PROGRAM" in
+    "iTerm.app")
+        TERMINAL_APP="com.googlecode.iterm2"
+        TERMINAL_PROCESS_NAME="iTerm2"
+        ;;
+    "ghostty")
+        TERMINAL_APP="com.mitchellh.ghostty"
+        TERMINAL_PROCESS_NAME="ghostty"
+        ;;
+    "Apple_Terminal")
+        TERMINAL_APP="com.apple.Terminal"
+        TERMINAL_PROCESS_NAME="Terminal"
+        ;;
+    *)
+        # Fallback: default to Terminal.app
+        TERMINAL_APP="com.apple.Terminal"
+        TERMINAL_PROCESS_NAME="Terminal"
+        ;;
+esac
 
-# Exit early if terminal already has focus (no notification needed)
-if [ "$HAS_FOCUS" = true ]; then
+# Exit early if this terminal already has focus (no notification needed)
+FOCUSED_APP=$(osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true' 2>/dev/null)
+if [[ "$FOCUSED_APP" == "$TERMINAL_PROCESS_NAME" ]]; then
     exit 0
 fi
 
