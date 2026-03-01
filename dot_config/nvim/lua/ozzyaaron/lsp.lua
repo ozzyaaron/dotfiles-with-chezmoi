@@ -1,50 +1,54 @@
 -- LSP Configuration
 
--- Define capabilities BEFORE enabling LSP servers (they reference this global)
-local blink_capabilities = require('blink.cmp').get_lsp_capabilities()
-blink_capabilities.general = blink_capabilities.general or {}
-blink_capabilities.general.positionEncodings = { 'utf-16' }
+-- Defer blink.cmp + LSP server enable until first buffer load (saves ~8ms startup)
+vim.api.nvim_create_autocmd({ 'BufReadPost', 'BufNewFile' }, {
+  group = vim.api.nvim_create_augroup('user-lsp-setup', { clear = true }),
+  once = true,
+  callback = function()
+    local blink_capabilities = require('blink.cmp').get_lsp_capabilities()
+    blink_capabilities.general = blink_capabilities.general or {}
+    blink_capabilities.general.positionEncodings = { 'utf-16' }
 
--- Enhanced capabilities for better completion
-blink_capabilities.textDocument = blink_capabilities.textDocument or {}
-blink_capabilities.textDocument.completion = blink_capabilities.textDocument.completion or {}
-blink_capabilities.textDocument.completion.completionItem = {
-  documentationFormat = { 'markdown', 'plaintext' },
-  snippetSupport = true,
-  preselectSupport = true,
-  insertReplaceSupport = true,
-  labelDetailsSupport = true,
-  deprecatedSupport = true,
-  commitCharactersSupport = true,
-  tagSupport = { valueSet = { 1 } },
-  resolveSupport = {
-    properties = {
-      'documentation',
-      'detail',
-      'additionalTextEdits',
-      'labelDetails',
-    },
-  },
-}
+    blink_capabilities.textDocument = blink_capabilities.textDocument or {}
+    blink_capabilities.textDocument.completion = blink_capabilities.textDocument.completion or {}
+    blink_capabilities.textDocument.completion.completionItem = {
+      documentationFormat = { 'markdown', 'plaintext' },
+      snippetSupport = true,
+      preselectSupport = true,
+      insertReplaceSupport = true,
+      labelDetailsSupport = true,
+      deprecatedSupport = true,
+      commitCharactersSupport = true,
+      tagSupport = { valueSet = { 1 } },
+      resolveSupport = {
+        properties = {
+          'documentation',
+          'detail',
+          'additionalTextEdits',
+          'labelDetails',
+        },
+      },
+    }
 
--- Signature help capabilities
-blink_capabilities.textDocument.signatureHelp = {
-  dynamicRegistration = false,
-  signatureInformation = {
-    documentationFormat = { 'markdown', 'plaintext' },
-    parameterInformation = { labelOffsetSupport = true },
-    activeParameterSupport = true,
-  },
-}
+    blink_capabilities.textDocument.signatureHelp = {
+      dynamicRegistration = false,
+      signatureInformation = {
+        documentationFormat = { 'markdown', 'plaintext' },
+        parameterInformation = { labelOffsetSupport = true },
+        activeParameterSupport = true,
+      },
+    }
 
--- Make capabilities available globally for lsp/ config files
-_G.capabilities = blink_capabilities
+    -- Set capabilities globally before enabling servers (lsp/*.lua configs reference this)
+    _G.capabilities = blink_capabilities
 
--- Enable LSP servers (uses configs from lsp/ directory)
-vim.lsp.enable('ruby_lsp')
-vim.lsp.enable('gopls')
-vim.lsp.enable('ts_ls')
-vim.lsp.enable('html')
+    -- Enable LSP servers (loads lsp/*.lua configs which reference _G.capabilities)
+    vim.lsp.enable('ruby_lsp')
+    vim.lsp.enable('gopls')
+    vim.lsp.enable('ts_ls')
+    vim.lsp.enable('html')
+  end,
+})
 
 -- LSP attach handler
 vim.api.nvim_create_autocmd('LspAttach', {
