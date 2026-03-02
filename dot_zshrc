@@ -23,10 +23,10 @@ _nvm_load() {
 }
 
 # Lazy stub: only load nvm.sh on first explicit nvm call
-nvm() { _nvm_load; nvm "$@"; }
+nvm() { unset -f nvm; _nvm_load; nvm "$@"; }
 
 # Auto-switch: only call nvm use when the nearest .nvmrc actually changes
-_nvm_current_nvmrc=""
+_nvm_current_nvmrc="__unset__"
 _nvm_auto_use() {
   local dir="$PWD" nvmrc=""
   while [[ "$dir" != "/" ]]; do
@@ -35,7 +35,8 @@ _nvm_auto_use() {
   done
   if [[ "$nvmrc" != "$_nvm_current_nvmrc" ]]; then
     _nvm_current_nvmrc="$nvmrc"
-    [[ -n "$nvmrc" ]] && { _nvm_load; nvm use; }
+    _nvm_load
+    [[ -n "$nvmrc" ]] && nvm use
   fi
 }
 
