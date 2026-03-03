@@ -33,6 +33,13 @@ sso_account_id = 270276483342
 sso_role_name = JaneEngineerNonProdAccess
 region = us-east-1
 output = json
+[profile CoreProdAccount]
+sso_start_url = https://d-90676c205e.awsapps.com/start
+sso_region = us-east-1
+sso_account_id = 401357502115
+sso_role_name = JaneEngineerProdAccess
+region = us-east-1
+output = json
 [profile dmerch-edge]
 sso_start_url = https://d-90676c205e.awsapps.com/start
 sso_region = us-east-1
