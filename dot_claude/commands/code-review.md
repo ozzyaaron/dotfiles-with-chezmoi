@@ -18,6 +18,8 @@ Analyze each changed file for the following issues, categorizing by severity:
 - **Security vulnerabilities**: SQL injection, XSS, CSRF issues, insecure authentication, exposed credentials/secrets/API keys
 - **Bugs & logic errors**: Nil/null reference errors, off-by-one errors, race conditions, incorrect conditionals
 - **Accidentally committed debug code**: `binding.pry`, `debugger`, `console.log`, `byebug`, hardcoded test data, TODO/FIXME that blocks functionality
+- **Linting issues**: run rubocop over the changed files
+- **Commit message/s**: Ensure they meet the commitlint and use conventional commits
 
 ### 🟡 Warnings (strongly consider fixing)
 - **Performance issues**: N+1 queries, missing database indexes, inefficient loops, memory leaks, unnecessary re-renders (React/JS)
