@@ -162,7 +162,7 @@
 [user]
   name = Aaron Todd
   email = ozzyaaron@gmail.com
-	signingkey = ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGkNl9DMuK3t0IwLIhVzEbjE9EiJS/+1I793RpshVMFJ atodd@Aarons-MacBook-Pro.local
+  signingkey = ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEv6TtQDi0I8Z+Oco5uhimZJ5P8pxe0r0T9woFb+7rAY
 
 [rerere]
   enabled = 1
@@ -172,6 +172,12 @@
 
 [gpg]
   format = ssh
+
+[gpg "ssh"]
+  program = "/Applications/1Password.app/Contents/MacOS/op-ssh-sign"
+
+[commit]
+  gpgsign = true
 [fetch]
 	prune = true
 [branch]

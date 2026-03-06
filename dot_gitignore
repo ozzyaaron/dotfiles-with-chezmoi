@@ -18,3 +18,10 @@ Thumbs.db
 .solargraph.yml
 
 .claude
+
+# Secrets safety net
+.env
+.env.*
+*.pem
+*.key
+credentials

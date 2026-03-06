@@ -7,3 +7,4 @@ font-family = MesloLGM Nerd Font Mono
 font-size = 16
 
 link-url = true
+macos-option-as-alt = true
