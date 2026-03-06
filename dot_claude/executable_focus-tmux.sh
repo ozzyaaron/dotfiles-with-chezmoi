@@ -12,11 +12,33 @@ RESTORE_SCRIPT="$HOME/.claude/restore-tmux.sh"
 # Ensure temp directory exists
 mkdir -p "$TEMP_DIR"
 
-# Detect terminal application using TERM_PROGRAM (set by the terminal that spawned this shell)
+# Detect terminal application
+# Inside tmux, $TERM_PROGRAM is "tmux", so walk the client's process tree
+# to find the actual terminal emulator (works even after session restore)
+DETECTED_TERMINAL=""
+if [ -n "$TMUX" ]; then
+    CLIENT_PID=$(tmux display-message -p '#{client_pid}' 2>/dev/null)
+    if [ -n "$CLIENT_PID" ]; then
+        CUR_PID=$CLIENT_PID
+        for i in $(seq 1 10); do
+            PNAME=$(ps -p "$CUR_PID" -o comm= 2>/dev/null)
+            case "$PNAME" in
+                */ghostty)       DETECTED_TERMINAL="ghostty"; break ;;
+                */iTerm2)        DETECTED_TERMINAL="iTerm.app"; break ;;
+                */Terminal)      DETECTED_TERMINAL="Apple_Terminal"; break ;;
+            esac
+            PARENT_PID=$(ps -p "$CUR_PID" -o ppid= 2>/dev/null | tr -d ' ')
+            [ -z "$PARENT_PID" ] || [ "$PARENT_PID" = "0" ] || [ "$PARENT_PID" = "1" ] && break
+            CUR_PID=$PARENT_PID
+        done
+    fi
+fi
+: "${DETECTED_TERMINAL:=$TERM_PROGRAM}"
+
 TERMINAL_APP=""
 TERMINAL_PROCESS_NAME=""
 
-case "$TERM_PROGRAM" in
+case "$DETECTED_TERMINAL" in
     "iTerm.app")
         TERMINAL_APP="com.googlecode.iterm2"
         TERMINAL_PROCESS_NAME="iTerm2"
@@ -30,7 +52,6 @@ case "$TERM_PROGRAM" in
         TERMINAL_PROCESS_NAME="Terminal"
         ;;
     *)
-        # Fallback: default to Terminal.app
         TERMINAL_APP="com.apple.Terminal"
         TERMINAL_PROCESS_NAME="Terminal"
         ;;
