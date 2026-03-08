@@ -1,7 +1,7 @@
-tap "homebrew/bundle"
-tap "homebrew/services"
 tap "jandedobbeleer/oh-my-posh"
 tap "koekeishiya/formulae"
+brew "ast-grep"
+brew "readline"
 brew "bash"
 brew "openssl@3"
 brew "bat"
@@ -9,35 +9,52 @@ brew "chezmoi"
 brew "direnv"
 brew "eza"
 brew "fd"
+brew "ffmpeg"
 brew "flyctl"
 brew "fzf"
+brew "gmp"
+brew "gcc"
+brew "gh"
 brew "git"
 brew "git-delta"
-brew "gmp"
+brew "git-filter-repo"
+brew "gum"
+brew "htop"
 brew "iperf3"
+brew "jemalloc"
+brew "lazygit"
 brew "libyaml"
+brew "llvm"
 brew "mas"
 brew "neovim"
-brew "readline"
+brew "nvm"
+brew "pgvector"
+brew "postgresql@18"
 brew "ruby-build"
 brew "rbenv"
+brew "ripgrep"
+brew "rust"
+brew "telnet"
+brew "terminal-notifier"
 brew "the_silver_searcher"
 brew "tlrc"
 brew "tmux"
+brew "uv"
+brew "worktrunk"
 brew "zoxide"
 brew "jandedobbeleer/oh-my-posh/oh-my-posh"
-brew "koekeishiya/formulae/skhd"
-brew "koekeishiya/formulae/yabai"
-cask "alacritty"
-cask "gimp"
-
+cask "docker-desktop"
+cask "font-meslo-lg-nerd-font"
+cask "ghostty"
+cask "lm-studio"
+cask "ollama-app"
 mas "Apple Configurator", id: 1037126344
 mas "Be Focused", id: 973134470
 mas "DaisyDisk", id: 411643860
-mas "Hand Mirror", id: 1502839586
 mas "Hidden Bar", id: 1452453066
 mas "iMovie", id: 408981434
 mas "iStat Menus", id: 1319778037
-mas "Pastebot", id: 1179623856
-mas "WhatsApp", id: 1147396723
+mas "Slack", id: 803453959
+mas "WhatsApp", id: 310633997
 mas "Xcode", id: 497799835
+cargo "cargo-insta"
