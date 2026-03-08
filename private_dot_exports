@@ -38,10 +38,7 @@ export PATH=$HOMEBREW_PREFIX/bin:$PATH
 export PATH=$PATH:$GOPATH/bin
 export PATH=$HOMEBREW_PREFIX/opt/postgresql@13/bin:$PATH
 export PATH="$HOMEBREW_PREFIX/opt/openssl@3/bin:$PATH"
-export PATH="$HOMEBREW_PREFIX/opt/openssl@1.1/bin:$PATH"
 # Gem bindir is handled by rbenv shims
-
-export LIBRARY_PATH="$LIBRARY_PATH:$HOMEBREW_PREFIX/opt/openssl@1.1/lib/"
 
 # For building with rbenv including jemalloc and other inputs from homebrew
 export CPPFLAGS="-I$HOMEBREW_PREFIX/opt/jemalloc/include"
@@ -49,8 +46,7 @@ export CFLAGS="-I$HOMEBREW_PREFIX/opt/jemalloc/include"
 export LDFLAGS="-L$HOMEBREW_PREFIX/opt/jemalloc/lib"
 
 # Ruby building options
-export RUBY_CONFIGURE_OPTS="--with-jemalloc --with-openssl-dir=$HOMEBREW_PREFIX/opt/openssl@1.1"
-export PKG_CONFIG_PATH="$HOMEBREW_PREFIX/opt/openssl@1.1/lib/pkgconfig"
+export RUBY_CONFIGURE_OPTS="--with-jemalloc"
 
 # Jemalloc for Ruby (LD_PRELOAD removed — no effect on macOS)
 export MALLOC_CONF="dirty_decay_ms:1000,narenas:2,background_thread:false,stats_print:false"
