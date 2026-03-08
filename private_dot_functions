@@ -1,15 +1,15 @@
 function smart_git_push() {
-  git push --set-upstream origin `git symbolic-ref --short HEAD`
+  git push --set-upstream origin "$(git symbolic-ref --short HEAD)"
 }
 
 function git_most_recent_tag() {
-  git checkout $(git describe --tags $(git rev-list --tags --max-count=1))
+  git checkout "$(git describe --tags "$(git rev-list --tags --max-count=1)")"
 }
 
 gcoi() {
   local branch
-  branch=$(git branch | fzf -q "$1" | sed "s/^\*? *//")
+  branch=$(git branch | fzf -q "$1" | sed -E "s/^\*? *//")
   if [ -n "$branch" ]; then
-      git checkout $(echo "$branch")
+      git checkout "$branch"
   fi
 }

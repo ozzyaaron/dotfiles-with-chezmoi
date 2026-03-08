@@ -25,7 +25,6 @@ export MANPAGER="less -X";
 export HOMEBREW_CASK_OPTS="--appdir=/Applications";
 
 export NODE_VERSION_PREFIX=v
-export NVM_DIR="$HOME/.nvm"
 export NODE_VERSIONS="$NVM_DIR/versions/node"
 
 export ITERM2_SQUELCH_MARK=1
