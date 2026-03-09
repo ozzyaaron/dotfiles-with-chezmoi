@@ -27,4 +27,11 @@ alias cddotfiles="cd ~/src/$USER/dotfiles/"
 
 alias ctags="$HOMEBREW_PREFIX/bin/ctags"
 
+if command -v eza &>/dev/null; then
+  alias ls='eza'
+  alias ll='eza -lh'
+  alias la='eza -lah'
+  alias lt='eza --tree'
+fi
+
 [ -f ~/.aliases_work ] && source ~/.aliases_work;
