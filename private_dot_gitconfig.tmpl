@@ -161,8 +161,13 @@
 
 [user]
   name = Aaron Todd
+{{- if eq .location "work" }}
+  email = aaron.todd@iheartjane.com
+  signingkey = {{ onepasswordRead "op://Personal/Github - work/public key" "my.1password.com" }}
+{{- else }}
   email = ozzyaaron@gmail.com
-  signingkey = ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEv6TtQDi0I8Z+Oco5uhimZJ5P8pxe0r0T9woFb+7rAY
+  signingkey = {{ onepasswordRead "op://Personal/Github - personal/public key" "my.1password.com" }}
+{{- end }}
 
 [rerere]
   enabled = 1
