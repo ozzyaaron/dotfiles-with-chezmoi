@@ -19,7 +19,7 @@ brew() {
   command brew "$@"
   local exit_code=$?
   if [[ $exit_code -eq 0 && "$1" =~ ^(install|uninstall|remove|reinstall|tap|untap)$ ]]; then
-    command brew bundle dump --force --file=~/.Brewfile --global && chezmoi re-add ~/.Brewfile
+    command brew bundle dump --force --file=~/.Brewfile && chezmoi re-add ~/.Brewfile
   fi
   return $exit_code
 }

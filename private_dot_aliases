@@ -23,9 +23,7 @@ alias wipit="git add -A && git ci -m 'WIP [ci skip]'"
 
 alias be="bundle exec"
 
-alias cddotfiles="cd ~/src/$USER/dotfiles/"
-
-alias ctags="$HOMEBREW_PREFIX/bin/ctags"
+alias cracd="chezmoi re-add && chezmoi cd"
 
 if command -v eza &>/dev/null; then
   alias ls='eza'
