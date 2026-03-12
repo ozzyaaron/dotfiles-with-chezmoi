@@ -128,7 +128,7 @@ _fzf_comprun() {
 [ -z "$DISABLE_ZOXIDE" ] && eval "$(zoxide init --cmd cd zsh)"
 
 eval "$(rbenv init - zsh)"
-export PATH="$HOME/.local/bin:$PATH"
+export PATH="$HOME/bin:$HOME/.local/bin:$PATH"
 
 # bun completions
 [ -s "/Users/aarontodd/.bun/_bun" ] && source "/Users/aarontodd/.bun/_bun"
