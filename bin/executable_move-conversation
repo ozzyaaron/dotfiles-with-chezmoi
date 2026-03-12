@@ -1,0 +1,277 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "bundler/inline"
+
+gemfile do
+  source "https://rubygems.org"
+  gem "tty-prompt", "= 0.23.1"
+  gem "tty-spinner", "= 0.9.3"
+  gem "pastel", "= 0.8.0"
+end
+
+require "json"
+require "fileutils"
+require "open3"
+require "shellwords"
+require "time"
+
+PROJECTS_DIR = File.expand_path("~/.claude/projects")
+HOME = File.expand_path("~/")
+SCAN_ROOT = HOME
+SCAN_DEPTH = 5
+SKIP_PATTERNS = %w[node_modules .cache vendor .local .bun .nvm .rbenv .vim .tmux .config .claude/plugins
+                    Library .Trash __pycache__ .venv .cargo .npm .yarn].freeze
+
+PASTEL = Pastel.new
+
+Signal.trap("INT") do
+  puts "\nAborted."
+  exit 130
+end
+
+def path_to_project_dir(path)
+  path.gsub(".", "").gsub("/", "-")
+end
+
+def short_home_path(full_path)
+  full_path.sub(%r{^#{Regexp.escape(HOME)}/?}, "~/")
+end
+
+def scan_git_repos
+  skip_args = SKIP_PATTERNS.map { |p| "-not -path '*/#{p}/*'" }.join(" ")
+  cmd = "find #{Shellwords.shellescape(SCAN_ROOT)} -maxdepth #{SCAN_DEPTH} -name .git #{skip_args} 2>/dev/null"
+  output, = Open3.capture2("sh", "-c", cmd)
+
+  output.lines.map { |l| l.strip.sub(%r{/\.git$}, "") }.reject(&:empty?)
+end
+
+def scan_conversations
+  conversations = []
+
+  Dir.glob(File.join(PROJECTS_DIR, "*", "*.jsonl")).each do |jsonl_path|
+    project_dir = File.basename(File.dirname(jsonl_path))
+    conversation_id = File.basename(jsonl_path, ".jsonl")
+    companion_dir = jsonl_path.sub(/\.jsonl$/, "")
+
+    first_user_message = nil
+    timestamp = nil
+
+    File.foreach(jsonl_path) do |line|
+      entry = JSON.parse(line)
+
+      timestamp ||= entry["timestamp"]
+
+      next unless entry["type"] == "user" && entry.dig("message", "content").is_a?(String)
+
+      content = entry.dig("message", "content")
+      # Skip local-command-caveat wrapper, find the real message
+      if content.match?(/\A\s*<local-command-caveat>/)
+        # Still use it but try to extract the useful part after the tag
+        cleaned = content.gsub(/<[^>]+>/, "").gsub(/\s+/, " ").strip
+        first_user_message = cleaned unless cleaned.empty?
+      else
+        first_user_message = content
+      end
+      break if first_user_message
+    rescue JSON::ParserError
+      next
+    end
+
+    preview = if first_user_message
+                first_user_message.gsub(/\s+/, " ").strip[0, 200]
+              end
+
+    date_str = begin
+                 Time.parse(timestamp).strftime("%b %d") if timestamp
+               rescue ArgumentError
+                 nil
+               end
+
+    project_path = short_home_path(File.join(PROJECTS_DIR, project_dir))
+
+    conversations << {
+      id: conversation_id,
+      project_dir: project_dir,
+      project_path: project_path,
+      jsonl_path: jsonl_path,
+      companion_dir: (companion_dir if File.directory?(companion_dir)),
+      timestamp: timestamp,
+      date_str: date_str,
+      preview: preview
+    }
+  end
+
+  conversations.sort_by { |c| c[:timestamp] || "" }.reverse
+end
+
+def format_conversation(conv)
+  # Single line: date | [id] project (branch) | preview
+  # tty-prompt filter matches against the full string, so all parts are searchable
+  parts = []
+  parts << PASTEL.dim(conv[:date_str].ljust(6)) if conv[:date_str]
+  parts << PASTEL.cyan(conv[:id][0, 8])
+  parts << PASTEL.bold(conv[:project_path])
+  parts << PASTEL.dim("| #{conv[:preview][0, 100]}") if conv[:preview]
+
+  # Append full ID so filtering by complete UUID works (not displayed due to terminal width)
+  parts << " #{conv[:id]}"
+
+  parts.join("  ")
+end
+
+def destination_choices(git_repos_thread)
+  existing = {}
+  Dir.glob(File.join(PROJECTS_DIR, "*")).select { |f| File.directory?(f) }.each do |dir|
+    name = File.basename(dir)
+    next if name == "memory"
+    existing[name] = name
+  end
+
+  unless git_repos_thread.join(0)
+    spinner = TTY::Spinner.new("[:spinner] Scanning for git repos...", format: :dots)
+    spinner.auto_spin
+    git_repos_thread.join
+    spinner.success("done")
+  end
+
+  git_repos = begin
+                git_repos_thread.value
+              rescue => e
+                warn "Warning: git repo scan failed (#{e.message})"
+                []
+              end
+
+  git_repos.each do |repo_path|
+    proj_dir = path_to_project_dir(repo_path)
+    existing[proj_dir] ||= repo_path
+  end
+
+  current_dir = path_to_project_dir(Dir.pwd)
+
+  existing.map do |dir, source|
+    label = if source == dir
+              dir
+            else
+              short_home_path(source)
+            end
+    if dir == current_dir
+      { name: "#{label}  #{PASTEL.dim('(current directory)')}", value: dir }
+    else
+      { name: label, value: dir }
+    end
+  end.sort_by { |d| d[:value] == current_dir ? "" : d[:name] }
+end
+
+def move_conversation(conv, dest_project_dir)
+  dest_dir = File.join(PROJECTS_DIR, dest_project_dir)
+  FileUtils.mkdir_p(dest_dir, mode: 0o700)
+
+  dest_jsonl = File.join(dest_dir, File.basename(conv[:jsonl_path]))
+  if File.exist?(dest_jsonl)
+    raise "Destination already has #{File.basename(dest_jsonl)}. Aborting to avoid overwriting."
+  end
+
+  if conv[:companion_dir]
+    dest_companion = File.join(dest_dir, File.basename(conv[:companion_dir]))
+    if File.exist?(dest_companion) || File.directory?(dest_companion)
+      raise "Destination already has #{File.basename(dest_companion)}/. Aborting to avoid overwriting."
+    end
+  end
+
+  FileUtils.mv(conv[:jsonl_path], dest_jsonl)
+  puts "  Moved #{File.basename(conv[:jsonl_path])}"
+  puts "     -> #{short_home_path(dest_jsonl)}"
+
+  if conv[:companion_dir]
+    dest_companion = File.join(dest_dir, File.basename(conv[:companion_dir]))
+    FileUtils.mv(conv[:companion_dir], dest_companion)
+    puts "  Moved #{File.basename(conv[:companion_dir])}/"
+    puts "     -> #{short_home_path(dest_companion)}/"
+  end
+end
+
+prompt = TTY::Prompt.new
+
+# Start git repo scan in background while user browses conversations
+git_repos_thread = Thread.new { scan_git_repos }
+
+puts "Scanning conversations..."
+conversations = scan_conversations
+puts "Found #{conversations.length} conversations.\n\n"
+
+if conversations.empty?
+  puts "No conversations found in #{PROJECTS_DIR}"
+  exit 0
+end
+
+choices = conversations.map do |conv|
+  { name: format_conversation(conv), value: conv }
+end
+
+puts "Type to filter by conversation ID, project, branch, or message content.\n\n"
+
+selected = prompt.select(
+  "Select a conversation to move:",
+  choices,
+  filter: true,
+  per_page: 10,
+  symbols: { marker: ">" }
+)
+
+puts
+puts "#{PASTEL.bold('Selected:')}  #{selected[:id]}"
+puts "#{PASTEL.bold('From:')}      #{selected[:project_path]}"
+if selected[:preview]
+  puts "#{PASTEL.bold('Preview:')}   #{selected[:preview][0, 100]}"
+end
+puts
+
+dest_choices = destination_choices(git_repos_thread)
+dest_choices << { name: PASTEL.dim("[ Enter custom path ]"), value: :custom }
+
+destination = prompt.select(
+  "Move to which project?",
+  dest_choices,
+  filter: true,
+  per_page: 15,
+  symbols: { marker: ">" }
+)
+
+if destination == :custom
+  custom_path = prompt.ask("Enter filesystem path (e.g., ~/src/myproject):")
+  path = custom_path&.strip
+  if path.nil? || path.empty?
+    puts "No destination provided. Aborting."
+    exit 1
+  end
+  destination = path_to_project_dir(File.expand_path(path))
+end
+
+if destination == selected[:project_dir]
+  puts "Source and destination are the same. Nothing to do."
+  exit 0
+end
+
+dest_path = File.join(PROJECTS_DIR, destination)
+dest_exists = File.directory?(dest_path)
+
+puts
+puts "#{PASTEL.bold('Move conversation')} #{PASTEL.cyan(selected[:id][0, 8])}..."
+puts "  From: #{short_home_path(File.join(PROJECTS_DIR, selected[:project_dir]))}"
+puts "  To:   #{short_home_path(dest_path)}"
+puts "        #{PASTEL.dim(dest_exists ? '(existing project)' : '(will be created)')}"
+puts
+
+if prompt.yes?("Proceed?")
+  begin
+    move_conversation(selected, destination)
+    puts "\n#{PASTEL.green('Done!')} Conversation moved successfully."
+  rescue => e
+    puts "\n#{PASTEL.red('Error:')} #{e.message}"
+    exit 1
+  end
+else
+  puts "Aborted."
+  exit 2
+end
