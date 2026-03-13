@@ -1,0 +1,296 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+#
+# kill-spring-servers.rb
+#
+# Gracefully stops all Spring servers across all iheartjane worktrees.
+# Falls back to SIGTERM/SIGKILL if graceful stop fails.
+# Also cleans up orphaned fsevent_watch processes left behind by Spring.
+#
+# Usage:
+#   kill-spring-servers          # dry-run (show what would be killed)
+#   kill-spring-servers --run    # actually kill everything
+#
+
+require "fileutils"
+require "open3"
+require "tmpdir"
+
+module Colors
+  ENABLED = $stdout.tty?
+  RED    = ENABLED ? "\033[0;31m" : ""
+  GREEN  = ENABLED ? "\033[0;32m" : ""
+  YELLOW = ENABLED ? "\033[1;33m" : ""
+  CYAN   = ENABLED ? "\033[0;36m" : ""
+  RESET  = ENABLED ? "\033[0m"    : ""
+end
+
+def log(msg)      = puts "#{Colors::GREEN}[INFO]#{Colors::RESET} #{msg}"
+def log_warn(msg) = puts "#{Colors::YELLOW}[WARN]#{Colors::RESET} #{msg}"
+def log_err(msg)  = puts "#{Colors::RED}[ERROR]#{Colors::RESET} #{msg}"
+
+def ps_lines(pattern)
+  output, = Open3.capture2("ps", "-eo", "pid,ppid,lstart,command")
+  output.lines.select { |l|
+    pid = l.strip.split(/\s+/)[0].to_i
+    pid > 0 && pid != Process.pid && l.match?(pattern)
+  }
+end
+
+def process_alive?(pid)
+  Process.kill(0, pid)
+  true
+rescue Errno::ESRCH
+  false
+rescue Errno::EPERM
+  true # process exists, we just can't signal it
+end
+
+def cwd_for_pid(pid)
+  output, = Open3.capture2("lsof", "-a", "-d", "cwd", "-p", pid.to_s, "-Fn")
+  name_line = output.lines.find { |l| l.start_with?("n") }
+  name_line&.delete_prefix("n")&.strip
+rescue StandardError
+  nil
+end
+
+def all_cwds(pids)
+  return {} if pids.empty?
+
+  cwds = {}
+  pids.each do |pid|
+    path = cwd_for_pid(pid)
+    cwds[pid] = path if path
+  end
+  cwds
+end
+
+def all_child_spring_apps(server_pids)
+  output, = Open3.capture2("ps", "-eo", "pid,ppid,command")
+  server_pid_list = server_pids.to_a
+  children = Hash.new { |h, k| h[k] = [] }
+  output.lines.each do |line|
+    fields = line.strip.split(/\s+/, 3)
+    child_pid = fields[0].to_i
+    ppid = fields[1].to_i
+    next if child_pid <= 0
+
+    if server_pid_list.include?(ppid) && fields[2]&.include?("spring app")
+      children[ppid] << child_pid
+    end
+  end
+  children
+end
+
+# ──────────────────────────────────────────────
+# 0. Validate arguments
+# ──────────────────────────────────────────────
+
+unknown = ARGV - ["--run"]
+unless unknown.empty?
+  log_err "Unknown argument(s): #{unknown.join(", ")}"
+  puts "Usage: kill-spring-servers [--run]"
+  exit 1
+end
+
+# ──────────────────────────────────────────────
+# 1. Find all Spring server PIDs and their worktrees
+# ──────────────────────────────────────────────
+
+spring_server_lines = ps_lines(/\bspring server\b/)
+
+server_pids = spring_server_lines.filter_map { |line|
+  pid = line.strip.split(/\s+/)[0].to_i
+  pid if pid > 0
+}
+
+cwds = all_cwds(server_pids)
+children_map = all_child_spring_apps(server_pids)
+
+servers = {} # pid -> { worktree:, started:, children: }
+
+spring_server_lines.each do |line|
+  fields = line.strip.split(/\s+/)
+  pid = fields[0].to_i
+  next if pid <= 0
+
+  cwd = cwds[pid] || "(unknown)"
+  # lstart format: "Thu Mar 12 08:28:31 2026" — columns 2..6 in ps output
+  started = fields[2..6].join(" ")
+  started = "unknown" if started.empty?
+  servers[pid] = { worktree: cwd, started: started, children: children_map[pid] || [] }
+end
+
+if servers.empty?
+  log "No Spring servers found. Nothing to do."
+  exit 0
+end
+
+puts
+puts "#{Colors::CYAN}#{"═" * 47}#{Colors::RESET}"
+puts "#{Colors::CYAN}  Spring Servers Found: #{servers.size}#{Colors::RESET}"
+puts "#{Colors::CYAN}#{"═" * 47}#{Colors::RESET}"
+puts
+
+servers.each do |pid, info|
+  puts "  PID #{Colors::YELLOW}#{pid}#{Colors::RESET}  ->  #{info[:worktree]}"
+  puts "    Started: #{info[:started]}"
+  puts "    Child app PIDs: #{info[:children].join(", ")}" if info[:children].any?
+  puts
+end
+
+# ──────────────────────────────────────────────
+# 2. Find orphaned fsevent_watch processes from iheartjane
+# ──────────────────────────────────────────────
+
+fsevent_pids = ps_lines(/fsevent_watch/).filter_map { |line|
+  pid = line.strip.split(/\s+/)[0].to_i
+  pid if pid > 0 && line.include?("iheartjane")
+}
+
+if fsevent_pids.any?
+  puts "#{Colors::CYAN}  fsevent_watch processes: #{fsevent_pids.size}#{Colors::RESET}"
+  puts
+end
+
+# ──────────────────────────────────────────────
+# 3. Dry-run check
+# ──────────────────────────────────────────────
+
+dry_run = !ARGV.include?("--run")
+
+if dry_run
+  puts "#{Colors::YELLOW}DRY RUN — no processes will be killed.#{Colors::RESET}"
+  puts "Run with #{Colors::GREEN}--run#{Colors::RESET} to actually stop everything."
+  puts
+  exit 0
+end
+
+# ──────────────────────────────────────────────
+# 4. Stop Spring servers
+# ──────────────────────────────────────────────
+
+stopped = 0
+force_killed = 0
+
+servers.each do |pid, info|
+  worktree = info[:worktree]
+
+  # Try graceful `spring stop` first
+  if worktree != "(unknown)"
+    begin
+      log "Stopping Spring in #{worktree} via 'spring stop'..."
+      _, status = Open3.capture2e("bundle", "exec", "spring", "stop", chdir: worktree)
+      if status.success?
+        log "  Graceful stop succeeded."
+        stopped += 1
+        next
+      else
+        log_warn "  'spring stop' failed, falling back to SIGTERM..."
+      end
+    rescue SystemCallError => e
+      log_warn "  Could not run 'spring stop' in #{worktree} (#{e.message}), falling back to SIGTERM..."
+    end
+  end
+
+  # Fall back to SIGTERM
+  log "Sending SIGTERM to spring server PID #{pid}..."
+  begin
+    Process.kill("TERM", pid)
+  rescue Errno::ESRCH
+    log "  PID #{pid} already exited."
+    stopped += 1
+    next
+  rescue Errno::EPERM
+    log_err "  No permission to signal PID #{pid}, skipping."
+    next
+  end
+
+  # Wait up to 5 seconds (check every 250ms for faster response)
+  deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+  while process_alive?(pid)
+    break if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+    sleep 0.25
+  end
+
+  # SIGKILL if still alive
+  if process_alive?(pid)
+    log_warn "  PID #{pid} didn't exit, sending SIGKILL..."
+    begin
+      Process.kill("KILL", pid)
+    rescue Errno::ESRCH
+      # gone between check and kill
+    end
+    force_killed += 1
+
+    # Also kill child spring app processes since SIGKILL doesn't cascade
+    info[:children].each do |child_pid|
+      begin
+        Process.kill("KILL", child_pid)
+      rescue Errno::ESRCH, Errno::EPERM
+        # already gone or not ours
+      end
+    end
+  else
+    log "  PID #{pid} stopped."
+    stopped += 1
+  end
+end
+
+# ──────────────────────────────────────────────
+# 5. Clean up leftover fsevent_watch processes
+# ──────────────────────────────────────────────
+
+remaining_fsevent = fsevent_pids.select { |pid| process_alive?(pid) }
+
+if remaining_fsevent.any?
+  log "Cleaning up #{remaining_fsevent.size} remaining fsevent_watch processes..."
+  remaining_fsevent.each do |pid|
+    begin
+      Process.kill("TERM", pid)
+    rescue Errno::ESRCH, Errno::EPERM
+      # gone or not ours
+    end
+  end
+  sleep 2
+  remaining_fsevent.each do |pid|
+    next unless process_alive?(pid)
+
+    begin
+      Process.kill("KILL", pid)
+    rescue Errno::ESRCH, Errno::EPERM
+      # gone or not ours
+    end
+  end
+  log "  Done."
+end
+
+# ──────────────────────────────────────────────
+# 6. Clean up Spring temp files
+# ──────────────────────────────────────────────
+
+spring_tmp = File.join(Dir.tmpdir, "spring-#{Process.uid}")
+if Dir.exist?(spring_tmp) && !File.symlink?(spring_tmp)
+  log "Cleaning up Spring temp files in #{spring_tmp}..."
+  FileUtils.rm_rf(spring_tmp)
+  log "  Done."
+end
+
+# ──────────────────────────────────────────────
+# Summary
+# ──────────────────────────────────────────────
+
+puts
+puts "#{Colors::CYAN}#{"═" * 47}#{Colors::RESET}"
+puts "#{Colors::GREEN}  Stopped: #{stopped}#{Colors::RESET}"
+puts "#{Colors::RED}  Force-killed: #{force_killed}#{Colors::RESET}" if force_killed > 0
+
+remaining = ps_lines(/\bspring (server|app)\b/).reject { |l| l.include?("containermanagerd") }.size
+if remaining > 0
+  log_warn "  #{remaining} spring process(es) still running — check manually."
+else
+  puts "#{Colors::GREEN}  All Spring processes cleaned up.#{Colors::RESET}"
+end
+puts "#{Colors::CYAN}#{"═" * 47}#{Colors::RESET}"
+puts
