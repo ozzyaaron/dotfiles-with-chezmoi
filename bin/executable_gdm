@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+#
+# gdm - delete merged branches and prune merged worktrees.
+# Works in regular repos and git worktrees.
+
+set -euo pipefail
+
+# Fetch latest remote state
+git fetch --quiet
+
+# Detect the main branch from the remote HEAD, fall back to whichever of master/main exists
+main_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null \
+  | sed 's@^refs/remotes/origin/@@') || true
+if [[ -z "$main_branch" ]]; then
+  if git show-ref --verify --quiet refs/heads/master 2>/dev/null; then
+    main_branch="master"
+  else
+    main_branch="main"
+  fi
+fi
+
+upstream="origin/$main_branch"
+current_branch=$(git symbolic-ref --short HEAD 2>/dev/null || true)
+
+# --- Phase 1: Remove worktrees whose branch is fully merged ---
+
+# Parse "git worktree list --porcelain" into (path, branch) pairs
+wt_path=""
+while IFS= read -r line; do
+  if [[ "$line" =~ ^worktree\ (.*) ]]; then
+    wt_path="${BASH_REMATCH[1]}"
+  elif [[ "$line" =~ ^branch\ refs/heads/(.*) ]]; then
+    wt_branch="${BASH_REMATCH[1]}"
+
+    # Skip the main branch and current branch
+    [[ "$wt_branch" == "$main_branch" ]] && continue
+    [[ "$wt_branch" == "$current_branch" ]] && continue
+
+    if ! git cherry "$upstream" "$wt_branch" 2>/dev/null | grep -q '^\+'; then
+      printf 'Remove worktree %s (%s)? (y/n) ' "$wt_path" "$wt_branch" < /dev/tty
+      read -r -n 1 REPLY < /dev/tty
+      echo
+      if [[ "$REPLY" =~ ^[Yy]$ ]]; then
+        git worktree remove "$wt_path" && git branch -d "$wt_branch" 2>/dev/null || true
+      fi
+    fi
+  fi
+done < <(git worktree list --porcelain 2>/dev/null)
+
+# Clean up any stale worktree entries (directories already removed)
+git worktree prune 2>/dev/null
+
+# --- Phase 2: Delete non-worktree merged branches ---
+
+while read -r branch; do
+  [[ "$branch" == "$main_branch" ]] && continue
+  [[ "$branch" == "$current_branch" ]] && continue
+
+  # Skip branches still checked out in a worktree
+  if git worktree list --porcelain 2>/dev/null | grep -q "^branch refs/heads/${branch}$"; then
+    continue
+  fi
+
+  if ! git cherry "$upstream" "$branch" 2>/dev/null | grep -q '^\+'; then
+    printf 'Delete %s? (y/n) ' "$branch"
+    read -r -n 1 REPLY < /dev/tty
+    echo
+    if [[ "$REPLY" =~ ^[Yy]$ ]]; then
+      git branch -d "$branch"
+    fi
+  fi
+done < <(git branch --format='%(refname:short)')
