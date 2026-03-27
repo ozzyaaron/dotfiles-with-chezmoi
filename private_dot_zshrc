@@ -137,6 +137,9 @@ export PATH="$HOME/bin:$HOME/.local/bin:$PATH"
 export BUN_INSTALL="$HOME/.bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
 
+# libpq for psql
+PATH="/opt/homebrew/opt/libpq/bin:$PATH"
+
 if command -v wt >/dev/null 2>&1; then eval "$(command wt config shell init zsh)"; fi
 
 # Nix
