@@ -6,21 +6,22 @@ input=$(cat)
 # Single jq call - extract all fields as newline-separated values
 # Use a unique sentinel for empty values since read swallows blank lines
 jq_out=$(echo "$input" | jq -r '
-  (.model.display_name // "-"),
-  (.workspace.current_dir // "-"),
+  (.model.display_name // "__EMPTY__"),
+  (.workspace.current_dir // "__EMPTY__"),
   (.output_style.name // "default"),
-  (.vim.mode // "-"),
   ((.context_window.used_percentage // "null") | tostring),
-  ((.context_window.context_window_size // 0) | tostring),
   ((.context_window.current_usage.input_tokens // 0) | tostring),
   ((.context_window.current_usage.cache_creation_input_tokens // 0) | tostring),
   ((.context_window.current_usage.cache_read_input_tokens // 0) | tostring),
   ((.rate_limits.five_hour.used_percentage // "null") | tostring),
   ((.rate_limits.seven_day.used_percentage // "null") | tostring),
-  (.session_name // "-"),
-  (.agent.name // "-"),
-  (.worktree.branch // "-")
+  (.session_name // "__EMPTY__"),
+  (.agent.name // "__EMPTY__"),
+  (.worktree.branch // "__EMPTY__")
 ')
+
+# Read effort level from settings (not available in statusline input)
+effort_level=$(jq -r '.effortLevel // "__EMPTY__"' ~/.claude/settings.json 2>/dev/null)
 
 # Parse line by line using line number
 i=0
@@ -29,17 +30,15 @@ while IFS= read -r line; do
         0) model="$line" ;;
         1) cwd="$line" ;;
         2) output_style="$line" ;;
-        3) vim_mode="$line" ;;
-        4) used_pct="$line" ;;
-        5) context_size="$line" ;;
-        6) input_tokens="$line" ;;
-        7) cache_creation="$line" ;;
-        8) cache_read="$line" ;;
-        9) rate_5h="$line" ;;
-        10) rate_7d="$line" ;;
-        11) session_name="$line" ;;
-        12) agent_name="$line" ;;
-        13) worktree_branch="$line" ;;
+        3) used_pct="$line" ;;
+        4) input_tokens="$line" ;;
+        5) cache_creation="$line" ;;
+        6) cache_read="$line" ;;
+        7) rate_5h="$line" ;;
+        8) rate_7d="$line" ;;
+        9) session_name="$line" ;;
+        10) agent_name="$line" ;;
+        11) worktree_branch="$line" ;;
     esac
     i=$((i + 1))
 done <<EOF
@@ -47,23 +46,32 @@ $jq_out
 EOF
 
 # Normalize sentinels
-[ "$vim_mode" = "-" ] && vim_mode=""
-[ "$session_name" = "-" ] && session_name=""
-[ "$agent_name" = "-" ] && agent_name=""
-[ "$worktree_branch" = "-" ] && worktree_branch=""
+[ "$session_name" = "__EMPTY__" ] && session_name=""
+[ "$agent_name" = "__EMPTY__" ] && agent_name=""
+[ "$worktree_branch" = "__EMPTY__" ] && worktree_branch=""
+[ "$effort_level" = "__EMPTY__" ] && effort_level=""
 
 # Context info - use pre-calculated percentage, add cache detail
 context_info=""
 if [ "$used_pct" != "null" ]; then
-    # Round float to integer
     used_int=$(printf '%.0f' "$used_pct" 2>/dev/null || echo "$used_pct")
     context_info="${used_int}% used"
     # Add cache hit indicator from raw tokens
-    current_total=$((input_tokens + cache_creation + cache_read))
-    if [ "$cache_read" -gt 0 ] 2>/dev/null && [ "$current_total" -gt 0 ] 2>/dev/null; then
-        cache_pct=$((cache_read * 100 / current_total))
-        context_info="${context_info}, ${cache_pct}% cached"
-    fi
+    case "$cache_read" in
+        ''|*[!0-9]*) ;;
+        *)
+            case "$input_tokens$cache_creation$cache_read" in
+                ''|*[!0-9]*) ;;
+                *)
+                    current_total=$((input_tokens + cache_creation + cache_read))
+                    if [ "$cache_read" -gt 0 ] && [ "$current_total" -gt 0 ]; then
+                        cache_pct=$((cache_read * 100 / current_total))
+                        context_info="${context_info}, ${cache_pct}% cached"
+                    fi
+                    ;;
+            esac
+            ;;
+    esac
 fi
 
 # Rate limit info
@@ -84,10 +92,8 @@ fi
 # Git information
 git_branch=""
 repo_name=""
-git_status=""
 repo_root=""
 if git -C "$cwd" rev-parse --git-dir > /dev/null 2>&1; then
-    # Use worktree branch if in a worktree session, otherwise detect from git
     if [ -n "$worktree_branch" ]; then
         git_branch="$worktree_branch"
     else
@@ -96,7 +102,6 @@ if git -C "$cwd" rev-parse --git-dir > /dev/null 2>&1; then
 
     repo_root=$(git -C "$cwd" --no-optional-locks rev-parse --show-toplevel 2>/dev/null)
     repo_name=$(basename "$repo_root")
-
 fi
 
 # Shorten model name (strip "Claude " prefix if present)
@@ -120,11 +125,14 @@ add_part() {
 
 # Repository and branch
 if [ -n "$repo_name" ] && [ -n "$git_branch" ]; then
-    add_part "🏷️ ${repo_name}:${git_branch}"
+    add_part "🌿 ${repo_name}:${git_branch}"
 fi
 
 # Model name (shortened)
 add_part "$short_model"
+
+# Effort level
+[ -n "$effort_level" ] && add_part "💪 $effort_level"
 
 # Context usage
 [ -n "$context_info" ] && add_part "🧠 $context_info"
@@ -139,7 +147,7 @@ fi
 
 # Directory - show relative path within repo, or basename if at root / not in repo
 if [ -n "$repo_root" ]; then
-    rel_path="${cwd#"$repo_root"}"
+    rel_path="${cwd#$repo_root}"
     rel_path="${rel_path#/}"
     [ -n "$rel_path" ] && add_part "📂 $rel_path"
 else
