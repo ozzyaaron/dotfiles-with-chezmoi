@@ -39,10 +39,10 @@ vim.api.nvim_create_autocmd({ 'BufReadPost', 'BufNewFile' }, {
       },
     }
 
-    -- Set capabilities globally before enabling servers (lsp/*.lua configs reference this)
-    _G.capabilities = blink_capabilities
+    -- Set capabilities for all LSP servers via wildcard config
+    vim.lsp.config('*', { capabilities = blink_capabilities })
 
-    -- Enable LSP servers (loads lsp/*.lua configs which reference _G.capabilities)
+    -- Enable LSP servers (configs loaded from lsp/*.lua)
     vim.lsp.enable('ruby_lsp')
     vim.lsp.enable('gopls')
     vim.lsp.enable('ts_ls')
