@@ -1,12 +1,13 @@
 return {
   'stevearc/conform.nvim',
+  enabled = false,
   event = { 'BufWritePre' },
   cmd = { 'ConformInfo' },
   keys = {
     {
       '<leader>cf',
       function()
-        require('conform').format({ async = true, lsp_fallback = true })
+        require('conform').format { async = true, lsp_fallback = true }
       end,
       mode = { 'n', 'v' },
       desc = '[C]ode [F]ormat',
