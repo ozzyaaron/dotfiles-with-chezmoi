@@ -126,6 +126,8 @@ _fzf_comprun() {
 
 # Zoxide (better cd)
 [ -z "$DISABLE_ZOXIDE" ] && eval "$(zoxide init --cmd cd zsh)"
+# Add zoxide interactive mode
+alias zi="cd -i"
 
 eval "$(rbenv init - zsh)"
 export PATH="$HOME/bin:$HOME/.local/bin:$PATH"
