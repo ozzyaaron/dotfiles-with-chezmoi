@@ -57,4 +57,4 @@ export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
 # Increase number of parellel build processes
 export MAKEOPTS="-j 10"
 
-CLAUDE_CODE_NO_FLICKER=1
+export CLAUDE_CODE_NO_FLICKER=1
