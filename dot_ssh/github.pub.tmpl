@@ -1,0 +1,5 @@
+{{- if eq .location "work" -}}
+{{ onepasswordRead "op://Personal/Github - work/public key" "my.1password.com" }}
+{{- else -}}
+{{ onepasswordRead "op://Personal/Github - personal/public key" "my.1password.com" }}
+{{- end -}}

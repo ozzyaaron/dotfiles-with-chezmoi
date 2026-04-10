@@ -1,2 +1,12 @@
+Include /Users/aarontodd/.colima/ssh_config
+
+Host github.com
+  IdentityFile ~/.ssh/github.pub
+  IdentitiesOnly yes
+
+Host gitlab.com
+  IdentityFile ~/.ssh/gitlab.pub
+  IdentitiesOnly yes
+
 Host *
   IdentityAgent "~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
