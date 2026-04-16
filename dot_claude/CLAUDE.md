@@ -34,3 +34,5 @@ This directory serves as Claude Code's persistent state storage. When working he
 - No package managers or build tools are present
 - Focus on configuration management and understanding Claude Code's internal structure
 - Changes to settings should be made through proper Claude Code configuration methods
+
+@RTK.md

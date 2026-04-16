@@ -6,9 +6,8 @@ Use multiple sug agents to review the code in different contexts and perspective
 
 ## What to Review
 
-Compare the current branch against `main` (or `master` if `main` doesn't exist).
-Only review tracked files.
-Check origin to see if I should rebase before the code review.
+Ensure branch is rebased against origin/main or origin/master
+On review tracked files that are different to origin/main or origin/master
 
 ## Review Categories
 

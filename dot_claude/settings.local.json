@@ -1,6 +1,34 @@
 {
   "permissions": {
-    "allow": [],
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "Bash(ps aux:*)",
+      "Bash(vm_stat:*)",
+      "Bash(sort:*)",
+      "Bash(powermetrics:*)",
+      "Bash(istats:*)",
+      "WebFetch(domain:ghostty.org)",
+      "Bash(chezmoi cat:*)",
+      "Bash(op account:*)",
+      "Bash(op read:*)",
+      "Bash(chezmoi apply:*)",
+      "Bash(brew list --cask)",
+      "Bash(echo \"$PATH\" | tr ':' '\\\\n' | grep -i \"$HOME\\\\|atodd\")",
+      "Bash(head -30 /Users/atodd/.claude/projects/-Users-atodd-src-ads-server/*/[0-9a-f]*.jsonl 2>/dev/null | head -50)",
+      "Bash(head -30 /Users/atodd/.claude/projects/-Users-atodd-src-id-service/*/[0-9a-f]*.jsonl 2>/dev/null | head -40)",
+      "Bash(head -30 /Users/atodd/.claude/projects/-Users-atodd-src-iheartjane/*/[0-9a-f]*.jsonl 2>/dev/null | head -50)",
+      "WebSearch",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(ruby -c ~/bin/move-conversation)",
+      "Bash(nvim --version)",
+      "Bash(nvim:*)",
+      "Bash(xxd /Users/atodd/.config/nvim/lsp/cucumber_language_server.lua)",
+      "Bash(python3 -c ':*)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(/Users/atodd/.claude/tmux-agents.sh:*)",
+      "Bash(tmux source:*)",
+      "Bash(python3 -c \"import json; json.load\\(open\\('/Users/atodd/.claude/settings.json'\\)\\)\")"
+    ],
     "deny": []
   }
 }
