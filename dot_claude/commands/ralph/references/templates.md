@@ -382,11 +382,15 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 IMAGE="{{PROJECT_SLUG}}-sandbox:latest"
-NAME="{{PROJECT_SLUG}}-sandbox"
-BUNDLE_VOL="{{PROJECT_SLUG}}-bundle"
-CLAUDE_VOL="{{PROJECT_SLUG}}-claude"
-HISTORY_VOL="{{PROJECT_SLUG}}-history"
-RTK_VOL="{{PROJECT_SLUG}}-rtk"
+
+# Unique suffix per worktree so parallel worktrees get their own containers.
+# The image is shared (same Dockerfile), but container + volumes are per-root.
+WORKTREE_HASH="$(printf '%s' "$ROOT" | shasum | cut -c1-8)"
+NAME="{{PROJECT_SLUG}}-sandbox-${WORKTREE_HASH}"
+BUNDLE_VOL="{{PROJECT_SLUG}}-bundle-${WORKTREE_HASH}"
+CLAUDE_VOL="{{PROJECT_SLUG}}-claude-${WORKTREE_HASH}"
+HISTORY_VOL="{{PROJECT_SLUG}}-history-${WORKTREE_HASH}"
+RTK_VOL="{{PROJECT_SLUG}}-rtk-${WORKTREE_HASH}"
 
 # Git worktree support: mount parent .git so git works inside container.
 GIT_EXTRA_MOUNT=""
@@ -743,6 +747,8 @@ The `PROMPT.md` that drives each ralph iteration. Replace:
 
 You are one iteration of a loop. Pick the single most important unblocked task from `IMPLEMENTATIONPLAN.md`, implement it completely, commit, and exit. The loop re-invokes you for the next task.
 
+Design specs live in `specs/*.md`. Each bullet in the implementation plan cites the relevant spec and section — read it before implementing.
+
 ## Step 1: Choose the task
 
 Read `IMPLEMENTATIONPLAN.md` in full. Then:
@@ -767,7 +773,8 @@ Read `IMPLEMENTATIONPLAN.md` in full. Then:
 
 ## Step 2: Implement
 
-- Read the spec file(s) or references cited in the bullet **before writing any code**. The spec is authoritative. Do not improvise.
+- Read the spec file(s) in `specs/` cited in the bullet **before writing any code**. The spec is authoritative — it contains the design decisions, data models, and interface shapes. Do not improvise or deviate from it.
+- If the bullet cites a specific section (e.g., `specs/foo.md § Heading`), read at least that section.
 - Implement only what the bullet describes. Do not touch unrelated files or implement the next bullet.
 - Follow existing project conventions (language, style, linter config). Add no unnecessary comments.
 

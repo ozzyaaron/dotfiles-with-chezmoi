@@ -1,6 +1,6 @@
 ---
 name: ralph
-description: "Set up sandboxed Claude Code ralph loops for Ruby/Rails projects. Makes a project 'ralphable' by generating Docker sandbox infrastructure (Dockerfile, firewall, launcher script), loop protocol (PROMPT.md), and implementation plans (IMPLEMENTATIONPLAN.md). Use this skill when the user mentions: ralph, ralph loop, sandbox, sandboxed loop, autonomous loop, ralphable, IMPLEMENTATIONPLAN, implementation plan for ralph, or wants to set up unattended Claude Code development loops. Also triggers for /ralph, /ralph init, /ralph plan, /ralph prompt. This skill handles the FULL scaffolding — not just stubs."
+description: "Set up sandboxed Claude Code ralph loops for Ruby/Rails projects. Makes a project 'ralphable' by generating Docker sandbox infrastructure (Dockerfile, firewall, launcher script), loop protocol (PROMPT.md), specs (specs/*.md), and implementation plans (IMPLEMENTATIONPLAN.md). Use this skill when the user mentions: ralph, ralph loop, sandbox, sandboxed loop, autonomous loop, ralphable, IMPLEMENTATIONPLAN, implementation plan for ralph, or wants to set up unattended Claude Code development loops. Also triggers for /ralph, /ralph init, /ralph prepare. This skill handles the FULL scaffolding — not just stubs."
 ---
 
 # Ralph — Sandboxed Claude Code Loop Setup
@@ -11,7 +11,7 @@ This skill makes any Ruby/Rails project "ralphable" by generating all the infras
 
 ## Subcommands
 
-Parse the user's input to determine which subcommand they want. Default to `init` if they just say "ralph" or "make this project ralphable."
+Parse the user's input to determine which subcommand they want. Default to `init` if they just say "ralph" or "make this project ralphable." Use `prepare` if they mention specs, planning, or a feature they want to build.
 
 ### `/ralph init`
 
@@ -42,7 +42,8 @@ Files to generate:
 4. **`docker/ralph/claude-settings.json`** — Copy verbatim from `references/templates.md` § Claude Settings. Identical across projects.
 
 5. **`bin/ralph`** — Read `references/templates.md` § Launcher. Customize:
-   - `IMAGE` and `NAME` derived from project directory name
+   - `IMAGE` derived from project directory name (shared across worktrees)
+   - `NAME` and volume names auto-suffixed with a hash of `$ROOT` (worktree-safe)
    - Volume names derived from project name
    - Dep install: `bundle install --quiet`
    - Dep volume: `/workspace/vendor/bundle`
@@ -75,13 +76,16 @@ op run --env-file=.env -- bin/ralph ralph 10
 
 ---
 
-### `/ralph plan`
+### `/ralph prepare`
 
-Generate or update `IMPLEMENTATIONPLAN.md` for a feature the user describes.
+Research the codebase, write detailed specs, and generate an implementation plan. This is the intellectual work — understanding the problem, making design decisions, and breaking the work into concrete steps the ralph loop can execute.
 
 **Step 1: Understand the feature**
 
-Ask the user to describe the feature if they haven't already. Get enough detail to break it into concrete implementation steps.
+Ask the user to describe the feature if they haven't already. Get enough detail to understand:
+- What the feature does
+- Constraints and edge cases
+- What's in scope vs. out of scope
 
 **Step 2: Analyze the codebase**
 
@@ -90,19 +94,56 @@ Read relevant files to understand:
 - Where new code should go
 - What existing code needs to change
 - What tests exist and how they're structured
+- Data models, API surfaces, and dependencies involved
 
-**Step 3: Generate IMPLEMENTATIONPLAN.md**
+**Step 3: Write specs to `specs/*.md`**
+
+Create one or more spec files under `specs/`. Each spec covers a logical area of the feature. Use a slug filename (e.g., `specs/notification-delivery.md`, `specs/api-endpoints.md`).
+
+Spec structure:
+```markdown
+# <Spec Title>
+
+## Goal
+
+<What this part of the feature accomplishes>
+
+## Constraints
+
+- <Hard requirements, performance targets, compatibility needs>
+
+## Design
+
+<The actual design — data models, API shapes, flow diagrams, algorithm choices>
+<Include code snippets for key interfaces/signatures where helpful>
+
+## Edge Cases
+
+- <Scenario> — <how it's handled>
+
+## Out of Scope
+
+- <Things explicitly not covered>
+```
+
+Rules for specs:
+- Be specific and concrete — name tables, columns, methods, routes
+- Reference existing source files that need to change (cite paths)
+- Make design decisions here so the loop doesn't have to improvise
+- Multiple specs are fine — split by logical boundary (e.g., data layer vs. API vs. UI)
+
+**Step 4: Generate `IMPLEMENTATIONPLAN.md`**
 
 Structure:
 ```markdown
 # <Feature Name>
 
 ## <Section 1 — e.g., "Database layer">
-- [ ] <Task description> — edit/create `<path>`
-- [ ] <Task description> — edit/create `<path>`
+- [ ] <Task description> — edit/create `<path>` (see `specs/<relevant-spec>.md`)
+- [ ] <Task description> — edit/create `<path>` (see `specs/<relevant-spec>.md` § <heading>)
 
 ## <Section 2 — e.g., "API endpoints">
-- [ ] <Task description> — edit/create `<path>`
+- [ ] <Task description> — edit/create `<path>` (see `specs/<relevant-spec>.md`)
 
 ## Blocked
 
@@ -111,22 +152,23 @@ Structure:
 
 Rules:
 - Tasks within a section are in dependency order (earlier tasks unblock later ones)
-- Each task references specific files to create or edit
+- Each task cites both the source file to change AND the spec section for lookup
 - Tasks are small enough for one ralph iteration (one focused change + tests)
 - Include a `## Blocked` section (initially empty — the loop populates it)
 - Include a `## Followups` section (initially empty — for scope-creep notes)
 
----
+**Step 5: Customize `PROMPT.md`**
 
-### `/ralph prompt`
+Read the existing `PROMPT.md` (generated by `/ralph init`). Update it with project-specific details discovered during analysis:
 
-Customize `PROMPT.md` for the current feature/task.
+- Files that should never be touched (credentials, generated code, vendored assets)
+- External APIs or services the loop needs to interact with
+- Project-specific coding conventions not captured by linter config
+- Special test setup steps (e.g., "run `bin/rails db:test:prepare` before specs")
+- Environment-specific notes (e.g., "use `SolidQueue` not Sidekiq for async jobs")
 
-Read the existing `PROMPT.md` and `IMPLEMENTATIONPLAN.md`. Understand what the ralph loop needs to do. Update `PROMPT.md` with any project-specific instructions — for example:
-- Special linter commands
-- Test commands that differ from the default
-- Files that should never be touched (credentials, generated code)
-- External APIs the loop needs to interact with
-- Project-specific coding conventions
+Keep the core loop protocol intact (choose → implement → verify → mark → commit). Only add/modify a `## Project-Specific Notes` section at the end.
 
-Keep the core loop protocol intact (choose → implement → verify → mark → commit). Only add/modify project-specific details.
+**Step 6: Report**
+
+Tell the user what specs were written and show the implementation plan summary. Ask if anything needs adjustment before running the loop.
