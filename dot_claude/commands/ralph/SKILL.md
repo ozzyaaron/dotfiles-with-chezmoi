@@ -51,7 +51,7 @@ Files to generate:
 
 6. **`PROMPT.md`** — Read `references/templates.md` § Loop Protocol. Set:
    - Lint command: detect from `.rubocop.yml` → `bundle exec rubocop -a`, or `bundle exec standardrb --fix` if using standard
-   - Test command: detect from `.rspec` → `bundle exec rspec`, or `bundle exec rails test` if using minitest
+   - Test command: prefer RSpec — check for `.rspec`, `spec/` dir, or `rspec-rails` in Gemfile → `bundle exec rspec`. Fall back to `bundle exec rails test` only if minitest and no RSpec present
    - Model name: use the model currently powering this session for the commit trailer
 
 7. **`.gitignore` additions** — Append `log/ralph.jsonl` and `log/*.log` if not already present.

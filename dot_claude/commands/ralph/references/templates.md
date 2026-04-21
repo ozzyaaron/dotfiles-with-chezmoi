@@ -739,7 +739,7 @@ esac
 
 The `PROMPT.md` that drives each ralph iteration. Replace:
 - `{{LINT_CMD}}` — detect from project: `bundle exec rubocop -a` if `.rubocop.yml` exists, `bundle exec standardrb --fix` if using standard, else skip
-- `{{TEST_CMD}}` — detect from project: `bundle exec rspec` if `.rspec` exists, `bundle exec rails test` if using minitest
+- `{{TEST_CMD}}` — detect from project: prefer `bundle exec rspec` (check for `.rspec`, `spec/` dir, or `rspec-rails` in Gemfile); fall back to `bundle exec rails test` only if minitest and no RSpec present
 - `{{MODEL_NAME}}` — the model currently powering the session (e.g., `Claude Opus 4.6`)
 
 ```markdown
@@ -778,13 +778,18 @@ Read `IMPLEMENTATIONPLAN.md` in full. Then:
 - Implement only what the bullet describes. Do not touch unrelated files or implement the next bullet.
 - Follow existing project conventions (language, style, linter config). Add no unnecessary comments.
 
-## Step 3: Verify (fix until green, then proceed)
+## Step 3: Verify (fix until green or block)
 
-Run in order. Fix any failures before moving on.
+Run in order. **The test suite must pass before you may commit or mark the bullet complete.**
 
 1. Run the project linter/formatter on files you touched: `{{LINT_CMD}}`
-2. Run the full test suite — must be green: `{{TEST_CMD}}`
-   - If a test was already failing before your change, note it under `## Followups` at the bottom of `IMPLEMENTATIONPLAN.md` and continue.
+2. Run the full test suite: `{{TEST_CMD}}`
+3. If tests fail:
+   a. Read the failure output carefully. If the failure is caused by your change, fix it and re-run the suite. Repeat until green.
+   b. If a test was already failing **before** your change (i.e., it fails on a clean checkout of the prior commit too), note it under `## Followups` at the bottom of `IMPLEMENTATIONPLAN.md` and continue — but only after confirming it's pre-existing.
+   c. If you cannot make the suite green after 3 fix attempts, **revert your changes** (`git checkout -- .`), mark the bullet as blocked in `## Blocked` with the failure details, and emit: `BLOCKED: test suite red — see IMPLEMENTATIONPLAN.md ## Blocked`
+
+**Do NOT commit with a red test suite. Do NOT mark a bullet `- [x]` with a red test suite. A red suite blocks the loop.**
 
 ## Step 4: Mark and commit
 
