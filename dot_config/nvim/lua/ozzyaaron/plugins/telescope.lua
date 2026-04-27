@@ -58,6 +58,7 @@ return {
             timeout = 250,          -- Timeout for preview loading (ms)
             filesize_limit = 2,     -- Preview files smaller than 2MB
             highlight_limit = 0.5,  -- Highlight files smaller than 500KB
+            treesitter = false,
           },
           layout_config = {
             horizontal = {
