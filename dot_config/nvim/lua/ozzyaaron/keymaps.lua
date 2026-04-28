@@ -33,3 +33,22 @@ map('n', '<leader>z', function()
     zoom_state = true
   end
 end, { desc = 'Toggle window zoom' })
+
+-- Cycle line numbers: relative -> absolute -> hybrid
+map('n', '<leader>ln', function()
+  local nu = vim.opt.number:get()
+  local rnu = vim.opt.relativenumber:get()
+  if rnu and not nu then
+    vim.opt.number = true
+    vim.opt.relativenumber = false
+    vim.notify('Line numbers: absolute')
+  elseif nu and not rnu then
+    vim.opt.number = true
+    vim.opt.relativenumber = true
+    vim.notify('Line numbers: hybrid')
+  else
+    vim.opt.number = false
+    vim.opt.relativenumber = true
+    vim.notify('Line numbers: relative')
+  end
+end, { desc = 'Cycle [L]ine [N]umber mode' })
