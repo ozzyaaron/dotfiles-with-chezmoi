@@ -41,7 +41,19 @@ Files to generate:
 
 4. **`docker/ralph/claude-settings.json`** — Copy verbatim from `references/templates.md` § Claude Settings. Identical across projects.
 
-5. **`bin/ralph`** — Read `references/templates.md` § Launcher. Customize:
+5. **`.mcp.json`** (project root) — Read `references/templates.md` § MCP Configuration. Always include the `context7` server. **Conditionally include the `postgres` server** if the project uses Postgres — detect by:
+   - `pg` gem present in `Gemfile` or `Gemfile.lock`, OR
+   - a `postgres:` service in `docker-compose.yml`, OR
+   - `adapter: postgresql` (or `postgres`) in `config/database.yml`.
+
+   If the project already has `.mcp.json`, merge: add the new server entries without removing existing ones. Tell the user when you include the postgres entry — they'll need to set `RALPH_POSTGRES_DSN` (read-only role recommended) in `.env` before running `bin/ralph up`.
+
+6. **`docker/ralph/skills/`** — Bake a curated skill set into the sandbox image. Read `references/templates.md` § Baked Skills.
+   - Locate `~/.claude/plugins/marketplaces/caveman/skills/caveman/SKILL.md` and copy to `docker/ralph/skills/caveman/SKILL.md`.
+   - Locate `~/.claude/plugins/marketplaces/caveman/skills/caveman-commit/SKILL.md` and copy to `docker/ralph/skills/caveman-commit/SKILL.md`.
+   - If those source paths don't exist (caveman not installed on host), report it and skip — create an empty `docker/ralph/skills/` so the Dockerfile `COPY` doesn't error. The user can install caveman via the plugin system and rerun `/ralph init` (or just `bin/ralph build`) later.
+
+7. **`bin/ralph`** — Read `references/templates.md` § Launcher. Customize:
    - `IMAGE` derived from project directory name (shared across worktrees)
    - `NAME` and volume names auto-suffixed with a hash of `$ROOT` (worktree-safe)
    - Volume names derived from project name
@@ -49,12 +61,14 @@ Files to generate:
    - Dep volume: `/workspace/vendor/bundle`
    - Dep env: `BUNDLE_PATH=/workspace/vendor/bundle`
 
-6. **`PROMPT.md`** — Read `references/templates.md` § Loop Protocol. Set:
+8. **`PROMPT.md`** — Read `references/templates.md` § Loop Protocol — Build Mode. Set:
    - Lint command: detect from `.rubocop.yml` → `bundle exec rubocop -a`, or `bundle exec standardrb --fix` if using standard
    - Test command: prefer RSpec — check for `.rspec`, `spec/` dir, or `rspec-rails` in Gemfile → `bundle exec rspec`. Fall back to `bundle exec rails test` only if minitest and no RSpec present
    - Model name: use the model currently powering this session for the commit trailer
 
-7. **`.gitignore` additions** — Append `log/ralph.jsonl` and `log/*.log` if not already present.
+9. **`PROMPT_plan.md`** — Copy verbatim from `references/templates.md` § Loop Protocol — Plan Mode. Drives `bin/ralph plan` (one-shot regeneration of the implementation plan from specs). Identical across projects.
+
+10. **`.gitignore` additions** — Append `log/ralph.jsonl` and `log/*.log` if not already present.
 
 **Step 3: Make executable**
 
@@ -68,11 +82,23 @@ Tell the user what was generated and give them the quickstart:
 claude setup-token
 # Store it in .env as CLAUDE_CODE_OAUTH_TOKEN=<token>
 
+# If you generated the postgres MCP entry, also set in .env:
+#   RALPH_POSTGRES_DSN=postgres://ralph_ro:<password>@host.docker.internal:5432/<db>
+# Use a READ-ONLY role. See references/templates.md § MCP Configuration for the role SQL.
+
 # Then:
 op run --env-file=.env -- bin/ralph build
 op run --env-file=.env -- bin/ralph up
 op run --env-file=.env -- bin/ralph ralph 10
+
+# Optional: regenerate IMPLEMENTATIONPLAN.md from specs (run after /ralph prepare,
+# or any time the plan goes stale or the build loop hits BLOCKED:).
+op run --env-file=.env -- bin/ralph plan
 ```
+
+**Two modes — when to use each:**
+- `bin/ralph ralph` (build mode) — the loop. Picks one bullet from `IMPLEMENTATIONPLAN.md`, implements it, commits, repeats. Build iterations never rewrite the plan.
+- `bin/ralph plan` (plan mode) — one-shot. Re-derives `IMPLEMENTATIONPLAN.md` from current `specs/*.md` and current source. Run when specs change, the plan drifts, or the build loop is going off-track. The plan is disposable; regenerate when wrong.
 
 ---
 

@@ -8,8 +8,11 @@ Complete, production-quality templates for every file `/ralph init` generates. R
 2. [Firewall (init-firewall.sh)](#firewall)
 3. [RTK Hook (rtk-rewrite.sh)](#rtk-hook) — verbatim
 4. [Claude Settings (claude-settings.json)](#claude-settings) — verbatim
-5. [Launcher (bin/ralph)](#launcher)
-6. [Loop Protocol (PROMPT.md)](#loop-protocol)
+5. [Baked Skills (docker/ralph/skills/)](#baked-skills)
+6. [MCP Configuration (.mcp.json)](#mcp-configuration)
+7. [Launcher (bin/ralph)](#launcher)
+8. [Loop Protocol — Build Mode (PROMPT.md)](#loop-protocol)
+9. [Loop Protocol — Plan Mode (PROMPT_plan.md)](#loop-protocol--plan-mode)
 
 ---
 
@@ -101,9 +104,10 @@ RUN ARCH=$(dpkg --print-architecture) && \
     rm -rf /tmp/rtk /tmp/rtk.tar.gz
 
 # Claude Code defaults baked into /etc so volume mount doesn't shadow them.
-RUN mkdir -p /etc/claude-defaults/hooks
+RUN mkdir -p /etc/claude-defaults/hooks /etc/claude-defaults/skills
 COPY rtk-rewrite.sh /etc/claude-defaults/hooks/rtk-rewrite.sh
 COPY claude-settings.json /etc/claude-defaults/settings.json
+COPY skills/ /etc/claude-defaults/skills/
 RUN chmod 0755 /etc/claude-defaults/hooks/rtk-rewrite.sh
 
 # Firewall script (runs as root via sudo at container start).
@@ -210,6 +214,9 @@ DOMAINS=(
     "statsig.anthropic.com"
     "sentry.io"
     "statsig.com"
+    "context7.com"
+    "api.context7.com"
+    "mcp.context7.com"
 {{PROJECT_EXTRA_DOMAINS}}
 )
 
@@ -350,6 +357,108 @@ fi
 
 ---
 
+## Baked Skills
+
+A curated, narrow set of Claude Code skills baked into the sandbox image at `/etc/claude-defaults/skills/` and seeded into `/home/ralph/.claude/skills/` on container start. The host's full skill set is intentionally NOT mounted — most of it is planning/review/orchestration that fights the autonomous loop's structure.
+
+Currently baked:
+- **`caveman/SKILL.md`** — terse output mode. Direct token savings per iteration. Source: `caveman:caveman` plugin.
+- **`caveman-commit/SKILL.md`** — conventional-commits message generator with caveman-style brevity. Source: `caveman:caveman-commit` plugin.
+
+### How `/ralph init` populates `docker/ralph/skills/`
+
+The skill files are copied verbatim from the host's installed plugin marketplace into the sandbox build context. On the host, locate them at:
+
+- `~/.claude/plugins/marketplaces/caveman/skills/caveman/SKILL.md`
+- `~/.claude/plugins/marketplaces/caveman/skills/caveman-commit/SKILL.md`
+
+Copy each into:
+
+- `docker/ralph/skills/caveman/SKILL.md`
+- `docker/ralph/skills/caveman-commit/SKILL.md`
+
+If the host doesn't have caveman installed, `/ralph init` should report that and skip the skill bake step (Dockerfile's `COPY skills/` will then copy an empty dir, which `cmd_up`'s seed loop tolerates).
+
+The Dockerfile `COPY skills/ /etc/claude-defaults/skills/` (already in the Dockerfile template) bakes them at image build. The launcher's `cmd_up` seed loop copies any baked skill that doesn't already exist in `/home/ralph/.claude/skills/` — so adding a skill later means rebuilding the image and restarting the container.
+
+### Adding more skills later
+
+Drop a new directory under `docker/ralph/skills/<skill-name>/` containing `SKILL.md` (and any references it needs), rebuild (`bin/ralph build`), and restart (`bin/ralph down && bin/ralph up`). Keep the bake list narrow — every loaded skill consumes context tokens per iteration.
+
+---
+
+## MCP Configuration
+
+Generated as `.mcp.json` at the project root. Project-scoped MCP config so Claude Code loads it on every session in this repo (sandboxed and host).
+
+Two servers, second is **conditional** on the project using Postgres:
+
+1. **context7** — always included. Up-to-date library/framework documentation lookup. Lets the loop check current API surfaces instead of guessing from training data.
+2. **postgres** — included when the project uses Postgres (detected via `pg` gem in `Gemfile` or `postgres` service in `docker-compose.yml`). Schema-aware queries, table introspection, sample data — reduces "I assumed `users.email` was unique" hallucinations.
+
+### Base template (context7 only)
+
+If the project does NOT use Postgres, ship just this:
+
+```json
+{
+  "mcpServers": {
+    "context7": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"]
+    }
+  }
+}
+```
+
+### With Postgres
+
+If the project uses Postgres, include the postgres server too:
+
+```json
+{
+  "mcpServers": {
+    "context7": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"]
+    },
+    "postgres": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "${RALPH_POSTGRES_DSN}"]
+    }
+  }
+}
+```
+
+`${RALPH_POSTGRES_DSN}` is a Claude Code env-var expansion. The launcher forwards `RALPH_POSTGRES_DSN` from host environment into the container at `up` time. **Use a read-only role** (or at minimum a non-prod DB) — the loop can issue arbitrary queries.
+
+Recommended DSN shape, pointing at the host's docker-compose Postgres:
+
+```
+postgres://ralph_ro:<password>@host.docker.internal:5432/<db_name>
+```
+
+To create the read-only role:
+
+```sql
+CREATE ROLE ralph_ro WITH LOGIN PASSWORD '...';
+GRANT CONNECT ON DATABASE <db_name> TO ralph_ro;
+GRANT USAGE ON SCHEMA public TO ralph_ro;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO ralph_ro;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO ralph_ro;
+```
+
+Tools exposed:
+- `mcp__context7__resolve-library-id` / `mcp__context7__get-library-docs` — library docs.
+- `mcp__postgres__query` — read-only SQL queries against the configured DSN. Schema introspection via `information_schema` queries.
+
+The container has Node 20 + npm; firewall already allows `registry.npmjs.org` (npm), `context7.com` / `api.context7.com` (doc backend), and the host network range (Postgres on the docker-compose host). No extra setup beyond setting `RALPH_POSTGRES_DSN` in your `.env`.
+
+---
+
 ## Launcher
 
 The `bin/ralph` script. Replace these placeholders:
@@ -365,6 +474,7 @@ The `bin/ralph` script. Replace these placeholders:
 #   bin/ralph exec ...           # run a command in the container
 #   bin/ralph claude ...         # shorthand: exec claude --dangerously-skip-permissions
 #   bin/ralph ralph [N] [--budget USD]  # loop N iterations or until budget
+#   bin/ralph plan               # one-shot: regenerate IMPLEMENTATIONPLAN.md from specs
 #   bin/ralph rtk ...            # run rtk inside the container
 #   bin/ralph rtk-reset          # wipe rtk stats DB
 #   bin/ralph progress           # show IMPLEMENTATIONPLAN.md progress
@@ -430,12 +540,16 @@ cmd_up() {
       echo "WARNING: No CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY set." >&2
     fi
 
+    local -a mcp_args=()
+    [ -n "${RALPH_POSTGRES_DSN:-}" ] && mcp_args+=(-e "RALPH_POSTGRES_DSN=${RALPH_POSTGRES_DSN}")
+
     local -a git_args=()
     [ -n "$GIT_EXTRA_MOUNT" ] && read -r -a git_args <<<"$GIT_EXTRA_MOUNT"
 
     docker run -d \
       --name "$NAME" \
       --cap-add=NET_ADMIN --cap-add=NET_RAW \
+      --add-host=host.docker.internal:host-gateway \
       -v "$ROOT:/workspace" \
       "${git_args[@]}" \
       -v "$BUNDLE_VOL:/workspace/vendor/bundle" \
@@ -446,6 +560,7 @@ cmd_up() {
       -e BUNDLE_PATH=/workspace/vendor/bundle \
       -e "RALPH_EXTRA_DOMAINS=${RALPH_EXTRA_DOMAINS:-}" \
       "${auth_args[@]}" \
+      "${mcp_args[@]}" \
       -w /workspace \
       "$IMAGE" \
       sleep infinity >/dev/null
@@ -459,13 +574,20 @@ cmd_up() {
   fi
   docker exec "$NAME" bash -lc '
     set -e
-    mkdir -p /home/ralph/.claude/hooks
+    mkdir -p /home/ralph/.claude/hooks /home/ralph/.claude/skills
     [ -f /home/ralph/.claude/hooks/rtk-rewrite.sh ] \
       || cp /etc/claude-defaults/hooks/rtk-rewrite.sh /home/ralph/.claude/hooks/rtk-rewrite.sh
     [ -f /home/ralph/.claude/settings.json ] && [ -s /home/ralph/.claude/settings.json ] \
       && [ "$(cat /home/ralph/.claude/settings.json)" != "{}" ] \
       || cp /etc/claude-defaults/settings.json /home/ralph/.claude/settings.json
     chmod 0755 /home/ralph/.claude/hooks/rtk-rewrite.sh
+    if [ -d /etc/claude-defaults/skills ]; then
+      for skill in /etc/claude-defaults/skills/*/; do
+        [ -d "$skill" ] || continue
+        name=$(basename "$skill")
+        [ -d "/home/ralph/.claude/skills/$name" ] || cp -r "$skill" "/home/ralph/.claude/skills/$name"
+      done
+    fi
   ' || true
   echo "Sandbox ready."
 }
@@ -647,6 +769,22 @@ for line in sys.stdin:
 '
 }
 
+cmd_plan() {
+  ensure_running
+  [ -f "$ROOT/PROMPT_plan.md" ] || { echo "No PROMPT_plan.md in $ROOT" >&2; exit 1; }
+  if [ ! -d "$ROOT/specs" ] || [ -z "$(ls -A "$ROOT/specs" 2>/dev/null)" ]; then
+    echo "No specs/ directory or it is empty. Plan mode needs specs to plan from." >&2
+    exit 1
+  fi
+  mkdir -p "$ROOT/log"
+  echo "Running plan iteration. Ctrl+C to stop."
+  trap 'echo "Stopping."; exit 0' INT TERM
+  docker exec -i "$NAME" claude --dangerously-skip-permissions -p \
+    --output-format=stream-json --verbose < "$ROOT/PROMPT_plan.md" \
+    | tee -a "$ROOT/log/ralph.jsonl" \
+    | ralph_filter
+}
+
 cmd_rtk() {
   ensure_running
   docker exec $(exec_flags) "$NAME" rtk "$@"
@@ -719,6 +857,7 @@ case "$cmd" in
   exec)     cmd_exec "$@" ;;
   claude)   cmd_claude "$@" ;;
   ralph)    cmd_ralph "$@" ;;
+  plan)     cmd_plan "$@" ;;
   rtk)      cmd_rtk "$@" ;;
   rtk-reset) cmd_rtk_reset "$@" ;;
   progress) cmd_progress "$@" ;;
@@ -775,6 +914,9 @@ Read `IMPLEMENTATIONPLAN.md` in full. Then:
 
 - Read the spec file(s) in `specs/` cited in the bullet **before writing any code**. The spec is authoritative — it contains the design decisions, data models, and interface shapes. Do not improvise or deviate from it.
 - If the bullet cites a specific section (e.g., `specs/foo.md § Heading`), read at least that section.
+- **Don't assume not implemented.** Before writing new code, grep the codebase to confirm the functionality doesn't already exist. The plan was written from a snapshot; reality may have moved.
+- **Don't guess library APIs.** If the bullet uses a gem, library, or framework method you're not 100% sure of, look it up via context7 (`mcp__context7__resolve-library-id` → `mcp__context7__get-library-docs`) before writing code. Hallucinated APIs cost a full iteration to revert.
+- **Check the live schema before writing data-layer code.** If the bullet touches AR models, migrations, queries, or fixtures, run `mcp__postgres__query` first to confirm column names, types, nullability, and indexes. The migration files might lag the actual DB.
 - Implement only what the bullet describes. Do not touch unrelated files or implement the next bullet.
 - Follow existing project conventions (language, style, linter config). Add no unnecessary comments.
 
@@ -801,8 +943,69 @@ Run in order. **The test suite must pass before you may commit or mark the bulle
 
 ## Rules
 
-- **Plan edits**: only toggle `- [ ]` → `- [x]`, rewrite the `## Blocked` heading when probes show it's stale, and append to `## Followups`. Never reorder, rewrite, or delete existing bullets.
+- **Plan edits**: only toggle `- [ ]` → `- [x]`, rewrite the `## Blocked` heading when probes show it's stale, and append to `## Followups`. Never reorder, rewrite, or delete existing bullets. Plan-level rewrites happen via `bin/ralph plan` (separate invocation), not from inside the build loop.
 - **No scope creep**: if you spot a gap, add a note under `## Followups` (not a new bullet). Let the human triage it.
 - **Exit after one bullet**: output a one-line summary of what you did. The loop handles the rest.
 - **Never touch secrets files**: do NOT create, edit, or delete encrypted-credentials files or their master keys. If a bullet requires editing credentials, treat it as host-blocked and emit the `BLOCKED:` sentinel per step 5.
+```
+
+---
+
+## Loop Protocol — Plan Mode
+
+The `PROMPT_plan.md` driving `bin/ralph plan`. One-shot: run on demand to (re)generate `IMPLEMENTATIONPLAN.md` from `specs/*.md` and current source state. Not part of the build loop. Run when:
+- The plan is stale (specs changed, code drifted).
+- The build loop hits `BLOCKED:` and the human wants to re-plan around the obstacle.
+- Initial plan generation after a `/ralph prepare` round of spec writing.
+
+No placeholders to substitute — this template is project-agnostic. Copy verbatim.
+
+```markdown
+# Ralph — plan mode
+
+You are running planning mode for a ralph loop, not building. Your job is to (re)generate `IMPLEMENTATIONPLAN.md` based on the current contents of `specs/*.md` and the current source tree. **Do not modify source files. Only edit `IMPLEMENTATIONPLAN.md`.**
+
+## Step 1: Study the inputs
+
+Dispatch parallel subagents — one per spec file in `specs/` — and have each subagent return:
+- The spec's goal in 1–2 lines.
+- A list of concrete tasks needed to satisfy the spec, with cited file paths.
+- For each task, whether it is **already done**, **not done**, or **partial** — verified by reading or grepping the codebase. Do NOT assume not implemented; confirm by code search first.
+- For each external library, framework, or API the spec depends on, **look up current docs via context7** (`mcp__context7__resolve-library-id` then `mcp__context7__get-library-docs`) before deciding what tasks are needed. Don't fabricate API surfaces from training-data memory — Rails, gems, and JS libs all change between minor versions.
+- If the project uses Postgres and the spec touches data models or queries, **inspect the live schema via `mcp__postgres__query`** (e.g., `SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name='...'`). Tasks should be grounded in what the database actually looks like, not what the spec or migration files imply.
+
+Separately, read the existing `IMPLEMENTATIONPLAN.md` (if present):
+- Note completed bullets (`- [x]`) — these are preserved.
+- For each entry under `## Blocked`, **re-probe** whether it is still blocked. If the probe succeeds (resource reachable, dep installed, credential present), it is no longer blocked.
+- Note current `## Followups` entries — they are preserved unless the spec now addresses them.
+
+Reserve the main context for synthesis; don't read whole spec files yourself when a subagent can do it.
+
+## Step 2: Synthesize
+
+Rewrite `IMPLEMENTATIONPLAN.md`:
+
+- Group tasks into sections by logical boundary (e.g., "Database layer", "API endpoints", "UI"). Prepend a one-line rationale to each section: *what spec drives it.*
+- Within each section, dependency-ordered: foundational tasks first.
+- Each task formatted: `- [ ] <description> — edit/create <path> (see specs/<file>.md § <section>)`.
+- Preserve completed bullets (`- [x]`) at the top of their relevant section.
+- `## Blocked`: list current real blockers, each with what concretely is needed to resolve. Stale entries that probed clean are removed.
+- `## Followups`: preserve prior entries; add new ones for scope creep observations or ambiguities found in specs.
+
+## Step 3: Verify
+
+- Every task cites a spec file (and section, if a section title exists).
+- No task is large enough to span multiple build iterations — split if so.
+- No task duplicates existing source. If unsure, grep before listing.
+- If a spec is itself ambiguous or contradictory, do NOT fabricate a design — note it under `## Followups` so a human can resolve.
+
+## Rules
+
+- **Plan only.** No code edits outside `IMPLEMENTATIONPLAN.md`.
+- **Capture the why.** A future ralph build iteration reading the plan should not need to re-derive intent.
+- **Don't assume not implemented** — confirm via code search.
+- **Don't guess library APIs.** When a spec depends on an external library or framework, consult context7 (`mcp__context7__resolve-library-id` → `mcp__context7__get-library-docs`) before deciding what tasks the spec implies. A bad plan built on stale API memory wastes the entire build loop.
+- **Preserve completed work.** Never remove `- [x]` bullets — they are the loop's audit trail.
+
+Exit after `IMPLEMENTATIONPLAN.md` is written. Output a one-line summary of how the plan changed (e.g., "rewrote API section, unblocked 2 items, added 3 new bullets").
 ```
