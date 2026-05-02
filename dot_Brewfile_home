@@ -50,6 +50,7 @@ cask "font-meslo-lg-nerd-font"
 cask "ghostty"
 cask "lm-studio"
 cask "ollama-app"
+cask "stats"
 mas "Apple Configurator", id: 1037126344
 mas "Be Focused", id: 973134470
 mas "DaisyDisk", id: 411643860
