@@ -102,6 +102,14 @@ if git -C "$cwd" rev-parse --git-dir > /dev/null 2>&1; then
 
     repo_root=$(git -C "$cwd" --no-optional-locks rev-parse --show-toplevel 2>/dev/null)
     repo_name=$(basename "$repo_root")
+
+    # Worktrunk detection: if repo_name is <repo>.<branch>, strip the branch suffix
+    if [ -n "$git_branch" ]; then
+        repo_suffix="${repo_name#*.}"
+        if [ "$repo_suffix" != "$repo_name" ] && [ "$repo_suffix" = "$git_branch" ]; then
+            repo_name="${repo_name%%.*}"
+        fi
+    fi
 fi
 
 # Shorten model name (strip "Claude " prefix if present)
