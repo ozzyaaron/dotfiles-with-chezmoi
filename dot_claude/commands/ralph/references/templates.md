@@ -655,21 +655,12 @@ cmd_ralph() {
       || break
 
     local stats
-    stats=$(tail -n 200 "$ROOT/log/ralph.jsonl" | grep '"type":"result"' | tail -n1 | python3 -c '
-import sys, json
-try:
-    e = json.loads(sys.stdin.read())
-    u = e.get("usage") or {}
-    print(e.get("total_cost_usd", 0) or 0)
-    print(u.get("input_tokens", 0) or 0)
-    print(u.get("output_tokens", 0) or 0)
-    print(u.get("cache_read_input_tokens", 0) or 0)
-except Exception:
-    print(0); print(0); print(0); print(0)
-' 2>/dev/null)
+    stats=$(tail -n 200 "$ROOT/log/ralph.jsonl" | grep '"type":"result"' | tail -n1 \
+      | jq -r '(.total_cost_usd // 0), (.usage.input_tokens // 0), (.usage.output_tokens // 0), (.usage.cache_read_input_tokens // 0)' 2>/dev/null \
+      || printf '0\n0\n0\n0')
     local iter_cost iter_in iter_out iter_cache
     { read -r iter_cost; read -r iter_in; read -r iter_out; read -r iter_cache; } <<<"$stats"
-    total_cost=$(python3 -c "print(round(${total_cost} + ${iter_cost:-0}, 4))")
+    total_cost=$(awk "BEGIN { printf \"%.4f\", ${total_cost:-0} + ${iter_cost:-0} }")
     total_in=$((total_in + ${iter_in:-0}))
     total_out=$((total_out + ${iter_out:-0}))
     total_cache_read=$((total_cache_read + ${iter_cache:-0}))
@@ -678,26 +669,29 @@ except Exception:
     printf '  cumulative: cost=$%.4f  in=%s  out=%s  cache_read=%s\n' \
       "$total_cost" "$total_in" "$total_out" "$total_cache_read"
 
+    local rl_info
+    rl_info=$(tail -c "+$((log_offset + 1))" "$ROOT/log/ralph.jsonl" 2>/dev/null \
+      | grep '"type":"rate_limit_event"' | tail -1 \
+      | jq -r '"\(.rate_limit_info.utilization * 100 | floor)\t\(.rate_limit_info.resetsAt)\t\(.rate_limit_info.isUsingOverage)"' 2>/dev/null || true)
+    if [ -n "$rl_info" ]; then
+      local rl_pct rl_ts rl_overage rl_resets rl_suffix=""
+      IFS=$'\t' read -r rl_pct rl_ts rl_overage <<<"$rl_info"
+      rl_resets=$(date -r "$rl_ts" "+%-I:%M%p" 2>/dev/null | tr '[:upper:]' '[:lower:]')
+      [ "$rl_overage" = "true" ] && rl_suffix=" (overage)"
+      printf '  usage limit: %s%%%s — resets %s\n' "$rl_pct" "$rl_suffix" "$rl_resets"
+    fi
+
     local sentinel
-    sentinel=$(tail -c "+$((log_offset + 1))" "$ROOT/log/ralph.jsonl" 2>/dev/null | python3 -c '
-import sys, json, re
-pat = re.compile(r"^(ALL DONE|COMPLETE|BLOCKED:.*)$", re.M)
-hit = ""
-for line in sys.stdin:
-    try: ev = json.loads(line)
-    except: continue
-    texts = []
-    if ev.get("type") == "assistant":
-        for b in ev.get("message", {}).get("content", []):
-            if b.get("type") == "text":
-                texts.append(b.get("text", ""))
-    elif ev.get("type") == "result":
-        texts.append(ev.get("result") or "")
-    for t in texts:
-        m = pat.search(t)
-        if m: hit = m.group(1)
-print(hit)
-' 2>/dev/null)
+    sentinel=$(tail -c "+$((log_offset + 1))" "$ROOT/log/ralph.jsonl" 2>/dev/null \
+      | jq -r '
+          if .type == "assistant" then
+            .message.content[]? | select(.type == "text") | .text
+          elif .type == "result" then
+            .result // empty
+          else empty
+          end
+        ' 2>/dev/null \
+      | grep -oE '^(ALL DONE|COMPLETE|BLOCKED:.*)$' | tail -1 || true)
     if [ -n "$sentinel" ]; then
       echo "  sentinel: $sentinel"
       echo "Loop finished: $sentinel"
@@ -728,7 +722,7 @@ print(hit)
     fi
 
     if [ "$(printf '%s' "$budget" | tr -d .0)" != "" ] 2>/dev/null; then
-      if python3 -c "import sys; sys.exit(0 if float('$total_cost') >= float('$budget') else 1)"; then
+      if awk "BEGIN { exit ($total_cost >= $budget ? 0 : 1) }"; then
         echo "Reached budget \$$budget (cumulative \$$total_cost). Stopping."
         break
       fi
@@ -737,36 +731,31 @@ print(hit)
 }
 
 ralph_filter() {
-  python3 -c '
-import sys, json
-for line in sys.stdin:
-    try:
-        ev = json.loads(line)
-    except Exception:
-        continue
-    t = ev.get("type")
-    if t == "assistant":
-        for block in ev.get("message", {}).get("content", []):
-            if block.get("type") == "text":
-                for text_line in block.get("text", "").splitlines():
-                    if text_line.startswith("CHOSEN:"):
-                        print("  " + text_line, flush=True)
-            elif block.get("type") == "tool_use":
-                name = block.get("name", "?")
-                inp = block.get("input", {})
-                detail = ""
-                if name == "Bash":
-                    detail = " " + (inp.get("description") or (inp.get("command","")[:60]))
-                elif name in ("Read","Edit","Write","Glob"):
-                    detail = " " + (inp.get("file_path") or inp.get("pattern",""))
-                elif name == "Grep":
-                    detail = " " + inp.get("pattern","")
-                print(f"  \u2192 {name}{detail}", flush=True)
-    elif t == "result":
-        r = (ev.get("result") or "").strip().splitlines()
-        if r:
-            print("  result: " + r[0][:200], flush=True)
-'
+  jq -r --unbuffered '
+    if .type == "assistant" then
+      .message.content[]? |
+      if .type == "text" then
+        .text | split("\n")[] | select(startswith("CHOSEN:")) | "  " + .
+      elif .type == "tool_use" then
+        ("  \u2192 " + .name +
+          if .name == "Bash" then
+            " " + (.input.description // (.input.command // "")[:60])
+          elif (.name == "Read" or .name == "Edit" or .name == "Write" or .name == "Glob") then
+            " " + (.input.file_path // .input.pattern // "")
+          elif .name == "Grep" then
+            " " + (.input.pattern // "")
+          else ""
+          end)
+      else empty
+      end
+    elif .type == "result" then
+      if (.result // "") != "" then
+        "  result: " + ((.result | split("\n")[0])[:200])
+      else empty
+      end
+    else empty
+    end
+  ' 2>/dev/null
 }
 
 cmd_plan() {
@@ -799,34 +788,37 @@ cmd_rtk_reset() {
 cmd_progress() {
   local plan="$ROOT/IMPLEMENTATIONPLAN.md"
   [ -f "$plan" ] || { echo "No IMPLEMENTATIONPLAN.md" >&2; exit 1; }
-  python3 - "$plan" <<'PY'
-import re, sys
-lines = open(sys.argv[1]).read().splitlines()
-section = None
-sections = []
-total_done = total_all = 0
-for line in lines:
-    m = re.match(r'^## (.+)$', line)
-    if m:
-        section = m.group(1).strip()
-        sections.append([section, 0, 0])
-        continue
-    if re.match(r'^- \[[ x]\]', line):
-        sections[-1][2] += 1
-        total_all += 1
-        if line.startswith('- [x]'):
-            sections[-1][1] += 1
-            total_done += 1
-width = max((len(s[0]) for s in sections), default=0)
-for title, done, total in sections:
-    if total == 0: continue
-    bar_len = 20
-    filled = int(bar_len * done / total)
-    bar = '\u2588' * filled + '\u2591' * (bar_len - filled)
-    print(f"  {title.ljust(width)}  [{bar}]  {done}/{total}")
-pct = (100 * total_done // total_all) if total_all else 0
-print(f"\n  total: {total_done}/{total_all}  ({pct}%)")
-PY
+  awk '
+    /^## / {
+      if (section != "" && total > 0) {
+        titles[n] = section; dones[n] = done; totals[n] = total; n++
+        if (length(section) > maxw) maxw = length(section)
+      }
+      section = substr($0, 4); done = 0; total = 0; next
+    }
+    /^- \[[ x]\]/ {
+      total++
+      if (substr($0, 3, 3) == "[x]") done++
+    }
+    END {
+      if (section != "" && total > 0) {
+        titles[n] = section; dones[n] = done; totals[n] = total; n++
+        if (length(section) > maxw) maxw = length(section)
+      }
+      total_done = 0; total_all = 0; bar_len = 20
+      for (i = 0; i < n; i++) {
+        total_done += dones[i]; total_all += totals[i]
+        filled = int(bar_len * dones[i] / totals[i])
+        bar = ""; for (j = 0; j < filled; j++) bar = bar "\u2588"
+               for (j = filled; j < bar_len; j++) bar = bar "\u2591"
+        padded = titles[i]
+        while (length(padded) < maxw) padded = padded " "
+        printf "  %s  [%s]  %d/%d\n", padded, bar, dones[i], totals[i]
+      }
+      pct = (total_all > 0) ? int(100 * total_done / total_all) : 0
+      printf "\n  total: %d/%d  (%d%%)\n", total_done, total_all, pct
+    }
+  ' "$plan"
 }
 
 cmd_shell() {
