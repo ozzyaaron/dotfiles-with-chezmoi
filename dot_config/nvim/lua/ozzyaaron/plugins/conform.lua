@@ -1,6 +1,6 @@
 return {
   'stevearc/conform.nvim',
-  enabled = false,
+  enabled = true,
   event = { 'BufWritePre' },
   cmd = { 'ConformInfo' },
   keys = {
@@ -27,7 +27,7 @@ return {
       }
     end,
     formatters_by_ft = {
-      go = { 'goimports', 'gofmt' },
+      go = { 'goimports', 'gofumpt' },
       javascript = { 'prettier' },
       javascriptreact = { 'prettier' },
       typescript = { 'prettier' },
