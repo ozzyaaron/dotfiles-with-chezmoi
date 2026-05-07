@@ -31,4 +31,10 @@ if command -v eza &>/dev/null; then
   alias lt='eza --tree'
 fi
 
+if command -v wt &>/dev/null; then
+  alias wts='wt switch'
+  alias wtc='wt swtich --create '
+fi
+
+
 [ -f ~/.aliases_work ] && source ~/.aliases_work;
