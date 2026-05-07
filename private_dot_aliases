@@ -33,7 +33,7 @@ fi
 
 if command -v wt &>/dev/null; then
   alias wts='wt switch'
-  alias wtc='wt swtich --create '
+  alias wtc='wt switch --create '
 fi
 
 
