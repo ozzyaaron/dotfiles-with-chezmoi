@@ -181,8 +181,21 @@ echo "Wrote $OUT"
 echo
 echo "Summary (median seconds):"
 python3 - "$OUT" <<'PY'
-import json, sys
+import json, math, sys
 d = json.load(open(sys.argv[1]))
+medians = []
 for k, v in d["results"].items():
     print(f"  {k:<30} {v['median_s']:>8.3f} s  (±{v['stddev_s']:.3f})  rc={','.join(v['exit_codes'])}")
+    medians.append(v["median_s"])
+if medians:
+    total = sum(medians)
+    geo = math.exp(sum(math.log(x) for x in medians) / len(medians))
+    print(f"  {'-'*60}")
+    print(f"  {'sum_of_medians':<30} {total:>8.3f} s   ({len(medians)} tasks)")
+    print(f"  {'geometric_mean':<30} {geo:>8.3f} s   <-- use for M1 vs M5 ratio")
+    # Persist into JSON too
+    d["aggregate"] = {"sum_of_medians_s": round(total, 3),
+                      "geometric_mean_s": round(geo, 3),
+                      "task_count": len(medians)}
+    json.dump(d, open(sys.argv[1], "w"), indent=2)
 PY
