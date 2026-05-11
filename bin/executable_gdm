@@ -41,7 +41,24 @@ while IFS= read -r line; do
       read -r -n 1 REPLY < /dev/tty
       echo
       if [[ "$REPLY" =~ ^[Yy]$ ]]; then
-        git worktree remove "$wt_path" && git branch -d "$wt_branch" 2>/dev/null || true
+        if ! git worktree remove "$wt_path" 2>/dev/null; then
+          printf '  worktree remove failed. Force remove %s? (y/n) ' "$wt_path" < /dev/tty
+          read -r -n 1 FORCE_REPLY < /dev/tty
+          echo
+          if [[ "$FORCE_REPLY" =~ ^[Yy]$ ]]; then
+            git worktree remove --force "$wt_path"
+          else
+            continue
+          fi
+        fi
+        if ! git branch -d "$wt_branch" 2>/dev/null; then
+          printf '  branch -d failed. Force delete branch %s? (y/n) ' "$wt_branch" < /dev/tty
+          read -r -n 1 FORCE_REPLY < /dev/tty
+          echo
+          if [[ "$FORCE_REPLY" =~ ^[Yy]$ ]]; then
+            git branch -D "$wt_branch"
+          fi
+        fi
       fi
     fi
   fi
@@ -66,7 +83,14 @@ while read -r branch; do
     read -r -n 1 REPLY < /dev/tty
     echo
     if [[ "$REPLY" =~ ^[Yy]$ ]]; then
-      git branch -d "$branch"
+      if ! git branch -d "$branch" 2>/dev/null; then
+        printf '  branch -d failed. Force delete branch %s? (y/n) ' "$branch" < /dev/tty
+        read -r -n 1 FORCE_REPLY < /dev/tty
+        echo
+        if [[ "$FORCE_REPLY" =~ ^[Yy]$ ]]; then
+          git branch -D "$branch"
+        fi
+      fi
     fi
   fi
 done < <(git branch --format='%(refname:short)')
