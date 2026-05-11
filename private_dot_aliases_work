@@ -5,13 +5,13 @@ alias gdtbr="git br | grep -vE 'ozzyaaron|master$|production|edge' | xargs git b
 alias pos-stg-login="aws sso login --profile jane-pos-staging"
 
 # Rails console access
-alias prod-rc="AWS_PROFILE=jane-pos-production ./script/remote-exec.sh prod bundle exec rails c"
-alias demo-rc="AWS_PROFILE=jane-pos-demo ./script/remote-exec.sh demo bundle exec rails c"
-alias stg-rc="AWS_PROFILE=jane-pos-staging ./script/remote-exec.sh stg bundle exec rails c"
-alias edge-rc="AWS_PROFILE=jane-pos-edge ./script/remote-exec.sh edge bundle exec rails c"
+alias prod-rc="./script/remote-exec.sh prod bundle exec rails c"
+alias demo-rc="./script/remote-exec.sh demo bundle exec rails c"
+alias stg-rc="./script/remote-exec.sh stg bundle exec rails c"
+alias edge-rc="./script/remote-exec.sh edge bundle exec rails c"
 
 # CLI access
-alias prod-cli="AWS_PROFILE=jane-pos-production ./script/remote-exec.sh prod bash"
-alias demo-cli="AWS_PROFILE=jane-pos-demo ./script/remote-exec.sh demo bash"
-alias stg-cli="AWS_PROFILE=jane-pos-staging ./script/remote-exec.sh stg bash"
-alias edge-cli="AWS_PROFILE=jane-pos-edge ./script/remote-exec.sh edge bash"
+alias prod-cli="./script/remote-exec.sh prod bash"
+alias demo-cli="./script/remote-exec.sh demo bash"
+alias stg-cli="./script/remote-exec.sh stg bash"
+alias edge-cli="./script/remote-exec.sh edge bash"
