@@ -37,6 +37,7 @@ brew "jq"
 brew "lazygit"
 brew "libpq"
 brew "libyaml"
+brew "mas"
 brew "neovim"
 brew "nvm"
 brew "oh-my-posh"
@@ -72,10 +73,27 @@ cask "rar"
 cask "raycast"
 cask "stats"
 cask "zed"
+mas "DaisyDisk", id: 411643860
+mas "GIPHY CAPTURE", id: 668208984
+mas "GLKVM", id: 6740846845
+mas "Hand Mirror", id: 1502839586
+mas "Hidden Bar", id: 1452453066
+mas "iMovie", id: 408981434
+mas "Keynote", id: 409183694
+mas "Messenger", id: 1480068668
+mas "Minimal", id: 1442727443
+mas "Numbers", id: 409203825
+mas "Pages", id: 409201541
+mas "Slack", id: 803453959
+mas "Xcode", id: 497799835
 vscode "bierner.markdown-mermaid"
 vscode "ms-azuretools.vscode-containers"
 vscode "ms-azuretools.vscode-docker"
 vscode "ms-vscode-remote.remote-containers"
 vscode "ms-vsliveshare.vsliveshare"
 vscode "shd101wyy.markdown-preview-enhanced"
+go "mvdan.cc/gofumpt"
+go "golang.org/x/tools/cmd/goimports"
+go "github.com/golangci/golangci-lint/cmd/golangci-lint"
 go "golang.org/x/tools/gopls"
+go "gotest.tools/gotestsum"
