@@ -1,0 +1,26 @@
+#!/usr/bin/env node
+// Entry point for the ralph-tools MCP server. Stdio JSON-RPC.
+//
+// Invoked by `claude` inside the sandbox with:
+//   /opt/ralph-tools/bin/ralph-tools --config /etc/ralph/config.yaml
+//
+// Runs as the `ralph-tools` system user (uid 1001), separate from the
+// LLM-controlled `ralph` user (uid 1000). The LLM cannot read this binary's
+// source or ptrace this process (PR_SET_DUMPABLE=0 is set by server.js at
+// startup).
+
+import { startServer } from "../src/server.js";
+
+const args = process.argv.slice(2);
+let configPath = "/etc/ralph/config.yaml";
+for (let i = 0; i < args.length; i++) {
+  if (args[i] === "--config" && args[i + 1]) {
+    configPath = args[i + 1];
+    i++;
+  }
+}
+
+startServer({ configPath }).catch((err) => {
+  console.error("[ralph-tools] fatal:", err?.message || err);
+  process.exit(1);
+});

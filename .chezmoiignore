@@ -1,1 +1,3 @@
 .config/tmux/.tmux/plugins/**
+.claude/ralph/ralph-tools/node_modules/**
+.claude/ralph/ralph-tools/package-lock.json

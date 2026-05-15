@@ -1,0 +1,771 @@
+#!/usr/bin/env bash
+# ralph — sandboxed Claude Code loop launcher.
+#
+# Lives at $HOME/.claude/ralph/ralph. Projects invoke it via a one-line shim
+# `bin/ralph` that execs this script. The shim is in sensitive_paths so the
+# loop cannot rewrite it; even if it did, the host's next invocation still
+# goes through $HOME/.claude/ralph/ralph because RALPH_HOME is set externally.
+#
+# Security model: see references/security.md.
+#
+# Subcommands:
+#   build         Build the image from this project's manifest.
+#   up            Start the container; init firewall; apply masked overlays.
+#   down          Stop and remove the container.
+#   status        Show image/container state.
+#   logs          Tail container logs.
+#   shell         Interactive shell (uses a separate, more permissive image).
+#   audit         Dump effective runtime config; sha256-stamp the manifest.
+#   ralph [N]     Run the loop up to N iterations (or unlimited if omitted).
+#   mask-env      Regenerate .ralph/masked/ from $ROOT/.env etc.
+#   progress      Print IMPLEMENTATIONPLAN.md progress.
+#   sync          Fetch commits from .ralph/sandbox-workspace back to $ROOT.
+#   test          Run the ralph-tools MCP server's unit tests. Auto-installs deps.
+
+set -euo pipefail
+
+# -----------------------------------------------------------------------------
+# Setup
+# -----------------------------------------------------------------------------
+
+RALPH_HOME="${RALPH_HOME:-$HOME/.claude/ralph}"
+ROOT="$(cd "$PWD" && pwd -P)"
+CONFIG="$ROOT/ralph.config.yaml"
+SANDBOX="$ROOT/.ralph/sandbox-workspace"
+MASKED="$ROOT/.ralph/masked"
+AUDIT_FILE="$ROOT/.ralph/last-audit.json"
+
+# Image + container naming. Image is shared across worktrees of the same project.
+# Container + volumes are per-worktree.
+PROJECT="$(basename "$ROOT")"
+WORKTREE_HASH="$(printf '%s' "$ROOT" | shasum | cut -c1-8)"
+IMAGE="${RALPH_IMAGE:-${PROJECT}-ralph:latest}"
+NAME="ralph-${PROJECT}-${WORKTREE_HASH}"
+INIT_NAME="${NAME}-init"
+SHARED_NETNS="container:${NAME}"
+
+# -----------------------------------------------------------------------------
+# Helpers
+# -----------------------------------------------------------------------------
+
+die() { echo "ralph: $*" >&2; exit 1; }
+log() { echo "[ralph] $*"; }
+
+require_config() {
+  [ -f "$CONFIG" ] || die "no ralph.config.yaml in $ROOT (run /ralph plan)"
+}
+
+manifest_sha256() {
+  # Compute a canonical sha256 of the manifest (strip trailing whitespace).
+  shasum -a 256 < "$CONFIG" | awk '{print $1}'
+}
+
+container_running() { docker ps --format '{{.Names}}' | grep -qx "$NAME"; }
+container_exists()  { docker ps -a --format '{{.Names}}' | grep -qx "$NAME"; }
+image_exists()      { docker image inspect "$IMAGE" >/dev/null 2>&1; }
+
+ensure_running() {
+  container_running || die "container not running. Run: bin/ralph up"
+}
+
+# Read a top-level scalar from the manifest. Cheap parser; reuses mask-env's tiny YAML subset.
+manifest_get() {
+  # $1 = key path (dot-separated, e.g. "stack.lint_cmd")
+  node -e '
+    const fs = require("fs");
+    const text = fs.readFileSync("'"$CONFIG"'", "utf8");
+    const lines = text.split("\n");
+    const target = "'"$1"'".split(".");
+    let stack = [];
+    let result = "";
+    function indent(line) { return line.match(/^ */)[0].length; }
+    for (let raw of lines) {
+      if (!raw || raw.trim().startsWith("#")) continue;
+      const ind = indent(raw);
+      const line = raw.replace(/\s+$/, "");
+      while (stack.length > 0 && stack[stack.length - 1].indent >= ind) stack.pop();
+      const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*):\s*(.*)$/);
+      if (!m) continue;
+      const key = m[1];
+      const rest = m[2];
+      stack.push({ key, indent: ind });
+      const path = stack.map(s => s.key);
+      if (path.length === target.length && path.every((p, i) => p === target[i])) {
+        let v = rest.trim();
+        if (v.startsWith("\"") && v.endsWith("\"")) v = v.slice(1, -1);
+        else if (v.startsWith("\x27") && v.endsWith("\x27")) v = v.slice(1, -1);
+        result = v;
+        break;
+      }
+    }
+    process.stdout.write(result);
+  '
+}
+
+# Read a list from the manifest (block-style or flow-style). Accepts a
+# dot-path (e.g. "network.allowed_domains") or a bare key.
+# The bare-key form ALSO matches the leaf segment of a nested key (e.g.
+# `allowed_domains` finds `network.allowed_domains`), which keeps callers
+# concise.
+manifest_list() {
+  node -e '
+    const fs = require("fs");
+    const text = fs.readFileSync("'"$CONFIG"'", "utf8");
+    const lines = text.split("\n");
+    const target = "'"$1"'".split(".");
+    function strip(s) {
+      let v = s.trim();
+      if ((v.startsWith("\"") && v.endsWith("\"")) || (v.startsWith("\x27") && v.endsWith("\x27"))) {
+        return v.slice(1, -1);
+      }
+      return v;
+    }
+    function indent(line) { return line.match(/^ */)[0].length; }
+    const stack = [];
+    let inList = null;
+    let listIndent = -1;
+    const out = [];
+    for (let raw of lines) {
+      if (!raw || raw.trim().startsWith("#")) continue;
+      // If we are inside a list, try to collect items first.
+      if (inList) {
+        if (raw.trim() === "") continue;
+        const it = raw.match(/^(\s+)-\s+(.+)$/);
+        if (it && (listIndent < 0 || it[1].length === listIndent)) {
+          if (listIndent < 0) listIndent = it[1].length;
+          out.push(strip(it[2]));
+          continue;
+        }
+        // De-indented or non-item: list ended.
+        inList = null;
+        listIndent = -1;
+      }
+      const ind = indent(raw);
+      while (stack.length > 0 && stack[stack.length - 1].indent >= ind) stack.pop();
+      const m = raw.match(/^\s*([A-Za-z_][A-Za-z0-9_]*):\s*(.*)$/);
+      if (!m) continue;
+      stack.push({ key: m[1], indent: ind });
+      const path = stack.map(s => s.key);
+      // Match: full path equals target, OR (single-segment target) matches the leaf.
+      const matches =
+        (path.length === target.length && path.every((p, i) => p === target[i])) ||
+        (target.length === 1 && path[path.length - 1] === target[0]);
+      if (matches) {
+        const rest = m[2];
+        if (rest.startsWith("[")) {
+          const inner = rest.slice(1, rest.lastIndexOf("]"));
+          for (const s of inner.split(",")) {
+            const v = strip(s);
+            if (v) out.push(v);
+          }
+          break;
+        }
+        if (rest === "") {
+          inList = true;
+          listIndent = -1;
+          continue;
+        }
+      }
+    }
+    process.stdout.write(out.join("\n"));
+  '
+}
+
+# -----------------------------------------------------------------------------
+# build — assemble build context + run docker build
+# -----------------------------------------------------------------------------
+
+cmd_build() {
+  require_config
+  local base_image
+  base_image=$(manifest_get "stack.base_image")
+  [ -z "$base_image" ] && base_image=$(case "$(manifest_get stack.name)" in
+    ruby*) echo "ruby:$(cat "$ROOT/.ruby-version" 2>/dev/null || echo 3.3)";;
+    node*) echo "node:20-bookworm";;
+    python*) echo "python:3.12-slim";;
+    *) echo "node:20-bookworm";;
+  esac)
+
+  local context="$ROOT/.ralph/build-context"
+  rm -rf "$context"
+  mkdir -p "$context/ralph-tools"
+
+  # Copy the ralph-tools MCP server source into the build context.
+  # Production: replace with a checksummed-tarball download.
+  cp -r "$RALPH_HOME/ralph-tools/." "$context/ralph-tools/"
+  # Strip dev-only dirs from the build context.
+  rm -rf "$context/ralph-tools/node_modules" "$context/ralph-tools/test"
+
+  # Build script for any project-declared MCP servers.
+  local mcp_install_present=0
+  local mcp_install="$context/mcp-install.sh"
+  : > "$mcp_install"
+  while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    mcp_install_present=1
+    # Each line should be: NAME PACKAGE@VERSION SHA256
+    # We don't support that level of detail yet — for v1, planner emits npm
+    # install commands directly via a future schema field.
+    echo "$line" >> "$mcp_install"
+  done < <(manifest_list "mcp_servers")
+
+  cp "$RALPH_HOME/Dockerfile" "$context/Dockerfile"
+  cp "$RALPH_HOME/init-firewall.sh" "$context/init-firewall.sh"
+  cp "$RALPH_HOME/claude-settings.json" "$context/claude-settings.json"
+
+  local claude_version
+  claude_version=$(manifest_get "claude_code_version")
+  [ -z "$claude_version" ] && claude_version="latest"
+
+  log "building image $IMAGE (base=$base_image)"
+  docker build \
+    --build-arg "BASE_IMAGE=$base_image" \
+    --build-arg "CLAUDE_CODE_VERSION=$claude_version" \
+    --build-arg "MCP_INSTALL_SCRIPT_PRESENT=$mcp_install_present" \
+    -t "$IMAGE" \
+    "$context"
+}
+
+# -----------------------------------------------------------------------------
+# mask-env — wrapper around mask-env.js
+# -----------------------------------------------------------------------------
+
+cmd_mask_env() {
+  require_config
+  node "$RALPH_HOME/mask-env.js" "$ROOT"
+}
+
+# -----------------------------------------------------------------------------
+# up — bring up sandbox workspace + init container + workload container
+# -----------------------------------------------------------------------------
+
+prepare_sandbox_workspace() {
+  # Rebuild $SANDBOX as a hardlink-copy of $ROOT, then overlay masked files.
+  rm -rf "$SANDBOX"
+  mkdir -p "$(dirname "$SANDBOX")"
+  cp -al "$ROOT" "$SANDBOX" 2>/dev/null || cp -a "$ROOT" "$SANDBOX"
+  # Remove .ralph/ inside the sandbox copy (it would include itself recursively).
+  rm -rf "$SANDBOX/.ralph"
+  # Overlay masked files: for each path in .ralph/masked/, replace the corresponding
+  # entry in the sandbox with the masked file (breaking the hardlink).
+  if [ -d "$MASKED" ]; then
+    (cd "$MASKED" && find . -type f -not -name "env") | while read -r rel; do
+      local relpath="${rel#./}"
+      local target="$SANDBOX/$relpath"
+      mkdir -p "$(dirname "$target")"
+      # Remove the hardlink to break the connection to the real host file.
+      rm -f "$target"
+      cp "$MASKED/$relpath" "$target"
+    done
+  fi
+}
+
+cmd_up() {
+  require_config
+  image_exists || cmd_build
+
+  # Generate masked files if they don't exist or are older than the manifest.
+  if [ ! -f "$MASKED/env" ] || [ "$CONFIG" -nt "$MASKED/env" ]; then
+    cmd_mask_env
+  fi
+
+  if container_running; then
+    log "container $NAME already running"
+    return 0
+  fi
+
+  prepare_sandbox_workspace
+
+  # Build the MCP config JSON from the manifest.
+  local mcp_config="$ROOT/.ralph/mcp.json"
+  cat > "$mcp_config" <<JSON
+{
+  "mcpServers": {
+    "ralph_tools": {
+      "type": "stdio",
+      "command": "/opt/ralph-tools/bin/ralph-tools",
+      "args": ["--config", "/etc/ralph/config.yaml"]
+    }
+  }
+}
+JSON
+
+  if container_exists; then
+    docker rm -f "$NAME" >/dev/null
+  fi
+
+  local oauth_token api_key
+  oauth_token=$(printf %s "${CLAUDE_CODE_OAUTH_TOKEN:-}" | tr -d '[:space:]')
+  api_key=$(printf %s "${ANTHROPIC_API_KEY:-}" | tr -d '[:space:]')
+  local auth_args=()
+  [ -n "$oauth_token" ] && auth_args+=(-e "CLAUDE_CODE_OAUTH_TOKEN=$oauth_token")
+  [ -n "$api_key" ] && auth_args+=(-e "ANTHROPIC_API_KEY=$api_key")
+  [ ${#auth_args[@]} -eq 0 ] && log "WARNING: no auth token set; loop will fail to call Anthropic"
+
+  # ---- 1. Pre-extract firewall input from the manifest ----
+  local fwin="$ROOT/.ralph/firewall-input.txt"
+  {
+    local dns
+    dns=$(manifest_get "network.dns_resolver")
+    [ -z "$dns" ] && dns="1.1.1.1"
+    echo "DNS_RESOLVER=$dns"
+    local dbp
+    dbp=$(manifest_get "host_exposure.db_port")
+    [ "$dbp" = "null" ] && dbp=""
+    echo "DB_PORT=$dbp"
+    # network.allowed_domains
+    while IFS= read -r d; do
+      [ -z "$d" ] && continue
+      echo "DOMAIN $d"
+    done < <(manifest_list "allowed_domains")
+    # network.registries
+    while IFS= read -r d; do
+      [ -z "$d" ] && continue
+      echo "DOMAIN $d"
+    done < <(manifest_list "registries")
+  } > "$fwin"
+
+  # ---- 2. Init container: privileged, sets up netns + iptables, then exits ----
+  # We use a "shared netns" pattern: workload container joins the init container's
+  # network namespace (--net=container:...). The init container stays running
+  # (a small `sleep` keeps the netns alive) but has no other processes.
+  if docker ps -a --format '{{.Names}}' | grep -qx "$INIT_NAME"; then
+    docker rm -f "$INIT_NAME" >/dev/null
+  fi
+  log "starting init container (privileged, owns netns)"
+  docker run -d \
+    --name "$INIT_NAME" \
+    --cap-add=NET_ADMIN --cap-add=NET_RAW \
+    -v "$fwin:/etc/ralph/firewall-input.txt:ro" \
+    -v "$RALPH_HOME/init-firewall.sh:/usr/local/bin/init-firewall.sh:ro" \
+    --entrypoint /bin/sh \
+    "$IMAGE" \
+    -c "/usr/local/bin/init-firewall.sh && exec sleep infinity" >/dev/null
+  # Wait for firewall init to write its state file.
+  local tries=0
+  until docker exec "$INIT_NAME" test -f /etc/ralph/iptables-state.txt 2>/dev/null; do
+    tries=$((tries + 1))
+    [ $tries -gt 30 ] && die "firewall init timed out"
+    sleep 0.5
+  done
+
+  # ---- 2. Workload container: joins init's netns, no caps, no-new-privs, read-only ----
+  log "starting workload container"
+  docker run -d \
+    --name "$NAME" \
+    --net "$SHARED_NETNS" \
+    --cap-drop=ALL \
+    --security-opt=no-new-privileges \
+    --read-only \
+    --tmpfs /tmp:rw,nosuid,nodev,size=256m \
+    --tmpfs /var/tmp:rw,nosuid,nodev,size=64m \
+    --tmpfs /home/ralph/.cache:rw,nosuid,nodev,size=512m \
+    --tmpfs /home/ralph/.claude:rw,nosuid,nodev,size=64m \
+    --tmpfs /home/ralph/.npm-global:rw,nosuid,nodev,size=128m \
+    --memory=4g --pids-limit=1024 --cpus=2 \
+    -v "$SANDBOX:/workspace" \
+    -v "$CONFIG:/etc/ralph/config.yaml:ro" \
+    -v "$MASKED:/etc/ralph/masked:ro" \
+    -v "$mcp_config:/etc/ralph/mcp.json:ro" \
+    -v "$RALPH_HOME/claude-settings.json:/etc/claude-defaults/settings.json:ro" \
+    -e CLAUDE_CONFIG_DIR=/home/ralph/.claude \
+    "${auth_args[@]}" \
+    -w /workspace \
+    "$IMAGE" \
+    sleep infinity >/dev/null
+
+  # Seed /home/ralph/.claude/settings.json from the bind-mounted default.
+  docker exec "$NAME" sh -c 'cp /etc/claude-defaults/settings.json /home/ralph/.claude/settings.json'
+
+  # Set git safe.directory inside container (UIDs may mismatch).
+  docker exec "$NAME" git config --global --add safe.directory /workspace >/dev/null 2>&1 || true
+  docker exec "$NAME" git config --global user.name "$(manifest_get git_commit.author_name || echo 'Ralph Loop')" >/dev/null 2>&1 || true
+  docker exec "$NAME" git config --global user.email "$(manifest_get git_commit.author_email || echo 'ralph@local')" >/dev/null 2>&1 || true
+
+  log "sandbox ready ($NAME). Run: bin/ralph audit"
+}
+
+# -----------------------------------------------------------------------------
+# down — stop and remove
+# -----------------------------------------------------------------------------
+
+cmd_down() {
+  for n in "$NAME" "$INIT_NAME"; do
+    if docker ps -a --format '{{.Names}}' | grep -qx "$n"; then
+      docker rm -f "$n" >/dev/null
+      log "removed $n"
+    fi
+  done
+}
+
+# -----------------------------------------------------------------------------
+# audit — dump effective runtime config; sha256-stamp manifest
+# -----------------------------------------------------------------------------
+
+cmd_audit() {
+  require_config
+  ensure_running
+
+  local sha
+  sha=$(manifest_sha256)
+  local out="$ROOT/.ralph/audit.md"
+  mkdir -p "$(dirname "$out")"
+
+  log "writing audit to $out"
+  {
+    echo "# Ralph sandbox audit"
+    echo
+    echo "- generated at: $(date -u +%FT%TZ)"
+    echo "- project: $ROOT"
+    echo "- image: $IMAGE"
+    echo "- workload container: $NAME"
+    echo "- init container: $INIT_NAME"
+    echo "- manifest sha256: \`$sha\`"
+    echo
+    echo "## Mounts (from /proc/self/mounts inside workload)"
+    echo '```'
+    docker exec "$NAME" cat /proc/self/mounts | grep -E "/workspace|/etc/ralph|/home/ralph" || true
+    echo '```'
+    echo
+    echo "## Container capabilities"
+    echo '```'
+    docker inspect "$NAME" --format '{{.HostConfig.CapAdd}} added; {{.HostConfig.CapDrop}} dropped' || true
+    echo '```'
+    echo
+    echo "## Security options"
+    echo '```'
+    docker inspect "$NAME" --format '{{.HostConfig.SecurityOpt}}' || true
+    docker inspect "$NAME" --format 'ReadonlyRootfs={{.HostConfig.ReadonlyRootfs}}' || true
+    docker inspect "$NAME" --format 'Memory={{.HostConfig.Memory}} PidsLimit={{.HostConfig.PidsLimit}}' || true
+    echo '```'
+    echo
+    echo "## Env exposed to claude process"
+    echo "(scrubbed of token values; shows variable names only)"
+    echo '```'
+    docker exec "$NAME" sh -c 'env | sed -E "s/(TOKEN|KEY|SECRET|PASS|DSN)=.*/\1=<masked>/" | sort'
+    echo '```'
+    echo
+    echo "## Network policy"
+    echo '```'
+    docker exec "$INIT_NAME" cat /etc/ralph/iptables-state.txt 2>/dev/null || echo "(no iptables state file)"
+    echo '```'
+    echo
+    echo "## Active network probes"
+    echo "- example.com (should fail):"
+    if docker exec "$NAME" sh -c 'curl --max-time 3 -o /dev/null -s -w "%{http_code}" https://example.com' 2>/dev/null | grep -q -E '^[12]'; then
+      echo "  **FAIL: example.com reachable**"
+    else
+      echo "  ok (denied)"
+    fi
+    echo "- api.anthropic.com (should succeed):"
+    if docker exec "$NAME" sh -c 'curl --max-time 3 -o /dev/null -s -w "%{http_code}" https://api.anthropic.com' 2>/dev/null | grep -q -E '^[123]'; then
+      echo "  ok (reachable)"
+    else
+      echo "  **FAIL: api.anthropic.com unreachable**"
+    fi
+    echo
+    echo "## ralph-tools MCP binary integrity"
+    echo '```'
+    docker exec "$NAME" ls -la /opt/ralph-tools/bin/ralph-tools 2>/dev/null || echo "(missing)"
+    docker exec "$NAME" sh -c 'find /opt/ralph-tools -maxdepth 2 -type f -name "*.js" -newer /tmp 2>/dev/null' || echo "(no recent modifications)"
+    echo '```'
+    echo
+    echo "## Sensitive files (sample)"
+    echo "(from inside the sandbox; values should be masked sentinels, not real secrets)"
+    echo '```'
+    docker exec "$NAME" sh -c 'for f in .env config/master.key; do echo "--- $f ---"; head -c 200 "$f" 2>/dev/null || echo "(absent)"; echo; done' || true
+    echo '```'
+  } > "$out"
+
+  # Stamp last-audit.json
+  cat > "$AUDIT_FILE" <<JSON
+{"manifest_sha256":"$sha","audited_at":"$(date -u +%FT%TZ)","container":"$NAME","image":"$IMAGE"}
+JSON
+
+  log "audit complete. Review $out before running bin/ralph ralph."
+}
+
+# -----------------------------------------------------------------------------
+# ralph — the loop
+# -----------------------------------------------------------------------------
+
+cmd_ralph() {
+  require_config
+  ensure_running
+
+  [ -f "$ROOT/PROMPT.md" ] || die "no PROMPT.md in $ROOT"
+  [ -f "$ROOT/IMPLEMENTATIONPLAN.md" ] || die "no IMPLEMENTATIONPLAN.md in $ROOT"
+
+  # Audit gate: manifest sha256 must match the last audit.
+  [ -f "$AUDIT_FILE" ] || die "no audit on record. Run: bin/ralph audit"
+  local audited_sha current_sha
+  audited_sha=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$AUDIT_FILE','utf8')).manifest_sha256)")
+  current_sha=$(manifest_sha256)
+  if [ "$audited_sha" != "$current_sha" ]; then
+    die "manifest sha256 changed since last audit:
+  audited: $audited_sha
+  current: $current_sha
+Re-run: bin/ralph audit"
+  fi
+
+  local max_iter=0 budget=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --budget) budget="$2"; shift 2 ;;
+      *) max_iter="$1"; shift ;;
+    esac
+  done
+
+  # Compute the additional allowed tools from the manifest.
+  local extra_tools
+  extra_tools=$(manifest_list "loop_allowed_tools" | tr '\n' ',' | sed 's/,$//')
+  local allowed_tools="mcp__ralph_tools__*"
+  [ -n "$extra_tools" ] && allowed_tools="$allowed_tools,$extra_tools"
+
+  mkdir -p "$ROOT/log"
+  trap 'echo "[ralph] stopping."; exit 0' INT TERM
+
+  local iter=0 total_cost=0
+  while :; do
+    iter=$((iter + 1))
+    if [ "$max_iter" -gt 0 ] 2>/dev/null && [ "$iter" -gt "$max_iter" ]; then
+      log "reached max $max_iter iterations"
+      break
+    fi
+    echo
+    log "=== iteration $iter at $(date +%H:%M:%S) ==="
+
+    # Pre-iteration: clear any leftover staging in the sandbox.
+    docker exec "$NAME" git -C /workspace reset --quiet HEAD || true
+
+    local log_offset
+    log_offset=$(cat "$ROOT/log/ralph.jsonl" 2>/dev/null | wc -c || echo 0)
+
+    docker exec -i "$NAME" claude -p \
+      --bare \
+      --tools "" \
+      --strict-mcp-config \
+      --mcp-config /etc/ralph/mcp.json \
+      --allowed-tools "$allowed_tools" \
+      --permission-mode default \
+      --output-format stream-json --verbose \
+      < "$ROOT/PROMPT.md" \
+      | tee -a "$ROOT/log/ralph.jsonl" \
+      | ralph_filter \
+      || break
+
+    # Cost accumulation.
+    local iter_cost
+    iter_cost=$(tail -n 200 "$ROOT/log/ralph.jsonl" | grep '"type":"result"' | tail -n1 \
+      | node -e 'let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>{try{const e=JSON.parse(s);console.log(e.total_cost_usd||0)}catch{console.log(0)}})' 2>/dev/null || echo 0)
+    total_cost=$(awk "BEGIN { printf \"%.4f\", ${total_cost:-0} + ${iter_cost:-0} }")
+    printf '  iter: cost=$%.4f  cumulative=$%s\n' "${iter_cost:-0}" "$total_cost"
+
+    # Sentinel detection: look for structured mark_* tool calls in this iteration's events.
+    local sentinel
+    sentinel=$(tail -c "+$((log_offset + 1))" "$ROOT/log/ralph.jsonl" 2>/dev/null \
+      | node -e '
+        let buf = "";
+        process.stdin.on("data", d => buf += d);
+        process.stdin.on("end", () => {
+          let found = "";
+          for (const line of buf.split("\n")) {
+            if (!line) continue;
+            try {
+              const ev = JSON.parse(line);
+              if (ev.type === "assistant") {
+                for (const c of (ev.message?.content || [])) {
+                  if (c.type === "tool_use") {
+                    if (c.name === "mcp__ralph_tools__mark_all_done") found = "ALL_DONE";
+                    else if (c.name === "mcp__ralph_tools__mark_blocked") {
+                      const reason = c.input?.reason || "no reason";
+                      found = "BLOCKED:" + reason;
+                    }
+                  }
+                }
+              }
+            } catch {}
+          }
+          process.stdout.write(found);
+        });
+      ' 2>/dev/null || echo "")
+    if [ -n "$sentinel" ]; then
+      log "sentinel: $sentinel"
+      if [[ "$sentinel" == BLOCKED:* ]]; then
+        echo
+        echo "--- ## Blocked section of IMPLEMENTATIONPLAN.md ---"
+        awk '/^## Blocked/{inblk=1; print; next} inblk && /^## /{exit} inblk' "$ROOT/IMPLEMENTATIONPLAN.md" 2>/dev/null || true
+        echo "---------------------------------------------------"
+        echo "Loop blocked. Resolve manually, then re-run bin/ralph ralph."
+      else
+        echo "Loop complete."
+      fi
+      break
+    fi
+
+    # Sync commits from sandbox back to host workspace.
+    cmd_sync_quiet
+
+    # Budget check.
+    if [ "$(printf '%s' "$budget" | tr -d .0)" != "" ] 2>/dev/null; then
+      if awk "BEGIN { exit ($total_cost >= $budget ? 0 : 1) }"; then
+        log "reached budget \$$budget (cumulative \$$total_cost)"
+        break
+      fi
+    fi
+  done
+}
+
+# Lightweight prettifier: surface CHOSEN: announcements and tool uses.
+ralph_filter() {
+  node -e '
+    let buf = "";
+    process.stdin.on("data", d => {
+      buf += d.toString("utf8");
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl);
+        buf = buf.slice(nl + 1);
+        if (!line) continue;
+        try {
+          const ev = JSON.parse(line);
+          if (ev.type === "assistant") {
+            for (const c of (ev.message?.content || [])) {
+              if (c.type === "text") {
+                for (const tl of c.text.split("\n")) {
+                  if (tl.startsWith("CHOSEN:")) process.stdout.write("  " + tl + "\n");
+                }
+              } else if (c.type === "tool_use") {
+                process.stdout.write("  → " + c.name + "\n");
+              }
+            }
+          } else if (ev.type === "result") {
+            const r = (ev.result || "").split("\n")[0];
+            if (r) process.stdout.write("  result: " + r.slice(0, 200) + "\n");
+          }
+        } catch {}
+      }
+    });
+  '
+}
+
+# -----------------------------------------------------------------------------
+# sync — fetch commits from sandbox back to host workspace
+# -----------------------------------------------------------------------------
+
+cmd_sync() {
+  require_config
+  if [ ! -d "$SANDBOX/.git" ]; then
+    log "no sandbox to sync from"
+    return 0
+  fi
+  cmd_sync_quiet
+  log "synced commits from sandbox to $ROOT"
+}
+
+cmd_sync_quiet() {
+  if [ ! -d "$SANDBOX/.git" ]; then return 0; fi
+  local branch
+  branch=$(git -C "$SANDBOX" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+  [ -z "$branch" ] && return 0
+  # Use a fetch that brings sandbox refs into a refs/sandbox/<branch> ref.
+  git -C "$ROOT" fetch --quiet "$SANDBOX" "refs/heads/${branch}:refs/sandbox/${branch}" 2>/dev/null || true
+}
+
+# -----------------------------------------------------------------------------
+# Misc
+# -----------------------------------------------------------------------------
+
+cmd_status() {
+  printf 'image:       %s\n' "$(image_exists && echo present || echo missing)"
+  printf 'workload:    %s\n' "$(container_running && echo running || (container_exists && echo stopped || echo absent))"
+  printf 'init:        %s\n' "$(docker ps --format '{{.Names}}' | grep -qx "$INIT_NAME" && echo running || echo absent)"
+  printf 'manifest:    %s\n' "$([ -f "$CONFIG" ] && echo present || echo missing)"
+  if [ -f "$AUDIT_FILE" ]; then
+    printf 'last audit:  %s\n' "$(node -e "console.log(JSON.parse(require('fs').readFileSync('$AUDIT_FILE','utf8')).audited_at)" 2>/dev/null || echo unknown)"
+  else
+    printf 'last audit:  none (run bin/ralph audit)\n'
+  fi
+}
+
+cmd_logs() { docker logs -f "$NAME"; }
+
+# Run the ralph-tools MCP server unit tests on the host. Auto-installs deps if missing.
+cmd_test() {
+  local tools_dir="$RALPH_HOME/ralph-tools"
+  [ -d "$tools_dir" ] || die "ralph-tools source not found at $tools_dir"
+  if [ ! -d "$tools_dir/node_modules" ]; then
+    log "node_modules missing; running npm install (one-time bootstrap)"
+    ( cd "$tools_dir" && npm install --no-audit --no-fund )
+  fi
+  ( cd "$tools_dir" && node --test test/*.test.js )
+}
+
+cmd_shell() {
+  ensure_running
+  docker exec -it "$NAME" /bin/sh
+}
+
+cmd_progress() {
+  local plan="$ROOT/IMPLEMENTATIONPLAN.md"
+  [ -f "$plan" ] || die "no IMPLEMENTATIONPLAN.md"
+  awk '
+    /^## / {
+      if (section != "" && total > 0) {
+        titles[n] = section; dones[n] = done; totals[n] = total; n++
+        if (length(section) > maxw) maxw = length(section)
+      }
+      section = substr($0, 4); done = 0; total = 0; next
+    }
+    /^- \[[ x]\]/ {
+      total++
+      if (substr($0, 3, 3) == "[x]") done++
+    }
+    END {
+      if (section != "" && total > 0) {
+        titles[n] = section; dones[n] = done; totals[n] = total; n++
+        if (length(section) > maxw) maxw = length(section)
+      }
+      total_done = 0; total_all = 0; bar_len = 20
+      for (i = 0; i < n; i++) {
+        total_done += dones[i]; total_all += totals[i]
+        filled = int(bar_len * dones[i] / totals[i])
+        bar = ""; for (j = 0; j < filled; j++) bar = bar "█"
+               for (j = filled; j < bar_len; j++) bar = bar "░"
+        padded = titles[i]
+        while (length(padded) < maxw) padded = padded " "
+        printf "  %s  [%s]  %d/%d\n", padded, bar, dones[i], totals[i]
+      }
+      pct = (total_all > 0) ? int(100 * total_done / total_all) : 0
+      printf "\n  total: %d/%d  (%d%%)\n", total_done, total_all, pct
+    }
+  ' "$plan"
+}
+
+# -----------------------------------------------------------------------------
+# Dispatch
+# -----------------------------------------------------------------------------
+
+cmd="${1:-}"; shift || true
+case "$cmd" in
+  build)     cmd_build     "$@" ;;
+  up)        cmd_up        "$@" ;;
+  down)      cmd_down      "$@" ;;
+  status)    cmd_status    "$@" ;;
+  logs)      cmd_logs      "$@" ;;
+  shell)     cmd_shell     "$@" ;;
+  audit)     cmd_audit     "$@" ;;
+  ralph)     cmd_ralph     "$@" ;;
+  mask-env)  cmd_mask_env  "$@" ;;
+  progress)  cmd_progress  "$@" ;;
+  sync)      cmd_sync      "$@" ;;
+  test)      cmd_test      "$@" ;;
+  ""|-h|--help|help)
+    sed -n '1,30p' "$0" | sed 's/^# \{0,1\}//'
+    ;;
+  *)
+    echo "Unknown subcommand: $cmd" >&2
+    echo "Try: bin/ralph help" >&2
+    exit 2
+    ;;
+esac

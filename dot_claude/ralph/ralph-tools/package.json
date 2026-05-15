@@ -1,0 +1,26 @@
+{
+  "name": "ralph-tools",
+  "version": "0.1.0",
+  "description": "Audited MCP tool surface for ralph sandboxed build loops.",
+  "license": "MIT",
+  "bin": {
+    "ralph-tools": "bin/ralph-tools"
+  },
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "start": "node bin/ralph-tools"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "yaml": "^2.5.1"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "bin",
+    "src"
+  ]
+}
