@@ -56,6 +56,8 @@ schema_version: 1                                        # launcher refuses if m
 # What this project is and how to build/test it. Stack-agnostic.
 stack:
   name: "ruby-rails"                                     # informational; "ruby-rails" / "node" / "python" / "go" / etc.
+  base_image: "ruby:4.0.2"                               # Docker base image for the loop's container
+                                                         # if omitted, launcher derives from stack.name + version files
   lint_cmd: "bundle exec rubocop -a"                     # exact command run by run_lint MCP tool
   test_cmd: "bundle exec rspec"                          # exact command run by run_tests MCP tool
   install_cmd: "bundle install --frozen"                 # exact command run by install_dependencies MCP tool
@@ -232,7 +234,7 @@ ENV PATH=/home/ralph/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
 ```
 
 Build-arg notes for the launcher:
-- `BASE_IMAGE` derived from `stack.name` via a small mapping table (ruby-rails → `ruby:${ruby_version}`, node → `node:20-bookworm`, etc.). User can override with `BASE_IMAGE=` env at `bin/ralph build`.
+- `BASE_IMAGE` comes from `stack.base_image` in the manifest. If the planner left it empty, the launcher falls back to a stack-aware default (`ruby:<version-from-.ruby-version>`, `node:20-bookworm`, `python:3.12-slim`, etc.). Prefer setting `stack.base_image` explicitly — it pins the build and removes inference.
 - `MCP_INSTALL_SCRIPT` is a generated shell snippet of `npm install` or `pip install` calls, one per entry in `mcp_servers`, each verified by sha256 before installing.
 
 ---

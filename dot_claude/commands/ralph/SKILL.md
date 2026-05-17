@@ -42,6 +42,17 @@ Parse the user's input to determine which subcommand. Default to `init` if they 
 
 Generates the sandbox scaffold + the per-project security manifest. Does **not** write specs or plan — that's `/ralph plan`. After `init`, the project has the infrastructure to run loops; after `plan`, it has the content to drive them.
 
+#### Step 0: Host prerequisites and re-init check
+
+Before generating anything, verify the host has what the loop needs at *host* time (the container brings its own runtime, but the launcher itself runs on the host):
+
+- **Docker daemon** reachable (`docker version`). If missing or not running, stop and tell the user to install/start Docker Desktop or equivalent before continuing — the loop cannot run otherwise.
+- **`node`** available on the host PATH (the launcher invokes `mask-env.js` via host node). If absent, ask the user to install node ≥ 18 and re-invoke.
+- **`jq`** on PATH (launcher uses it for manifest parsing).
+- **The git working tree is clean enough** that the user can review and revert init's changes via `git status` / `git diff`. If the tree has unrelated uncommitted changes, warn the user — init will mix its edits with their in-progress work.
+
+If `ralph.config.yaml` already exists (re-init), do not refuse — refresh in place. Assume source control: tell the user the run will overwrite vendored files (`bin/ralph`, `bin/ralph.d/**`) with the current skill version, and may modify the manifest. They can review with `git diff` and revert any individual change. Specifically call out: per-project customizations they made to vendored files (e.g., a tweaked `Dockerfile`) will be overwritten; they should commit before re-init so the diff is reviewable. Ask once for confirmation before proceeding.
+
 #### Step 1: Detect the project stack
 
 Investigate the project to determine three commands the loop will run via MCP: `lint_cmd`, `test_cmd`, `install_cmd`. Use whatever evidence the project gives you — manifest files, README, CI config, Makefile targets, package.json scripts, etc. Do not hardcode assumptions; verify each command actually exists in the project.
@@ -58,13 +69,15 @@ If the project has multiple linters or test runners (e.g., both rubocop and stan
 
 Report what was detected and confirm with the user before continuing.
 
+**Base image:** the loop runs inside a container; the manifest field `stack.base_image` controls the base image (e.g., `ruby:4.0.2`, `node:20-bookworm`, `python:3.12-slim`). Pick one informed by the stack and any version pin you found (e.g., `.ruby-version`, `.nvmrc`, `.python-version`). The launcher has stack-aware fallbacks if `base_image` is omitted, but populating it explicitly is better — it pins the build and removes a layer of inference. Confirm the chosen image with the user. If you can't pick one with confidence, ask: "What Docker base image should the loop's container use? (e.g., `ruby:4.0.2`, `node:20-bookworm`, your team's internal image, etc.)"
+
 #### Step 2: Generate per-project files
 
 Read `references/templates.md` for the canonical templates. Generate:
 
 1. **`ralph.config.yaml`** — the security manifest; every other piece of infrastructure derives from it. Write the **full schema** even when many fields are empty defaults, so `/ralph plan` can fill them in without re-deriving the shape. Schema authority: `references/templates.md § ralph.config.yaml`. At minimum populate:
    - `schema_version: 1`
-   - `stack: { name, lint_cmd, test_cmd, install_cmd }` from detection
+   - `stack: { name, base_image, lint_cmd, test_cmd, install_cmd }` from detection (Step 1)
    - `git_commit: { author_name, author_email, skip_hooks: false }`
    - `quotas: { max_tool_calls: 200, max_bytes_read: 50_000_000, max_bytes_written: 5_000_000 }`
    - `sensitive_paths`: the goal is that **nothing inside the sandbox can reach a real system the user owns** — production databases, cloud accounts, third-party APIs billed to the user, git remotes with write access, internal services, etc. Investigate the project for any file that could grant such access and list it. Examples of categories to look for (not exhaustive, not stack-specific): env files, encrypted credential stores + their decryption keys, cloud provider credential files, kubeconfigs, SSH private keys, OAuth/API tokens stored on disk, browser session caches, `.netrc`, signed certificates with private keys. If in doubt, mask it. The launcher always also injects `ralph.config.yaml`, `bin/ralph`, `.ralph/**`, `PROMPT.md`, `IMPLEMENTATIONPLAN.md`, `specs/**`.
@@ -79,7 +92,9 @@ Read `references/templates.md` for the canonical templates. Generate:
 
    Inspect `~/.claude/ralph/` to discover what the launcher needs (today: a launcher script plus `Dockerfile`, `init-firewall.sh`, `claude-settings.json`, `mask-env.js`, and a `ralph-tools/` MCP server source tree). Copy them under `bin/` — typically the launcher itself at `bin/ralph` and its siblings under `bin/ralph.d/` — but adapt to the project's existing conventions. Exclude any `node_modules`; container build re-installs.
 
-   The launcher's reference copy defaults its support-file root (`RALPH_HOME`) to `$HOME/.claude/ralph`. Adjust the vendored copy so it instead resolves support files relative to the launcher's own location. Pick whatever idiomatic mechanism your shell tooling supports — the goal is no hard-coded path outside the project. Verify your edit by running `bin/ralph status` (or similar lightweight subcommand) and confirming it does not read from `$HOME/.claude/ralph`.
+   The launcher's reference copy defaults its support-file root (`RALPH_HOME`) to `$HOME/.claude/ralph`. Adjust the vendored copy so it instead resolves support files relative to the launcher's own location. Pick whatever idiomatic mechanism your shell tooling supports — the goal is no hard-coded path outside the project.
+
+   Verify your edit: run `bin/ralph status`. It should report image/workload/manifest state without errors. If it fails, do not proceed silently — work with the user interactively: read the error, identify whether it's a path issue, a missing vendored file, a shell-syntax bug in your patch, or something else; show the fix; re-verify. Iterate until `bin/ralph status` succeeds.
 
    **The vendored files are starting points, not final.** Evaluate each for project fit. Most projects need no adjustments at init time — `/ralph plan` configures variation through the manifest rather than by editing these files. But check: the `Dockerfile` default base image, the `init-firewall.sh` DNS resolver, the `claude-settings.json` hook configuration.
 
@@ -99,15 +114,26 @@ Read `references/templates.md` for the canonical templates. Generate:
    ```
    (The audit report `.ralph/audit.md` IS committed so the team can review it. Everything else is per-machine state.)
 
-#### Step 3: Tell the user the next step
+#### Step 3: Commit the init output, then point to `/ralph plan`
+
+Run `git status` and present the diff to the user. Ask them to commit before proceeding to `/ralph plan` — committing now means any future `/ralph init` (upgrade) produces a reviewable diff against this baseline, and any planner-time changes to `ralph.config.yaml` show up as their own diff. Suggest a single commit covering the init artifacts:
 
 ```
-Run `/ralph plan` to:
-  - Research the feature you want to build
-  - Write specs/*.{md,html,json} with pre-fetched docs and schema info
-  - Generate IMPLEMENTATIONPLAN.md
-  - Finalize ralph.config.yaml (MCP servers, network allowlist, masked env vars)
-  - Build the image and run an audit
+git add ralph.config.yaml bin/ralph bin/ralph.d/ PROMPT.md .gitignore
+git commit -m "ralph: initialize sandbox infrastructure"
+```
+
+(Adjust the paths to whatever you actually wrote.)
+
+Then tell the user:
+
+```
+Next: run `/ralph plan` to
+  - research the feature you want to build
+  - write specs/*.{md,html,json} with pre-fetched docs and schema info
+  - generate IMPLEMENTATIONPLAN.md
+  - finalize ralph.config.yaml (MCP servers, network allowlist, masked env vars)
+  - build the image and run an audit
 ```
 
 ---
