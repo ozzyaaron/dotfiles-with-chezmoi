@@ -114,6 +114,14 @@ Read `references/templates.md` for the canonical templates. Generate:
    ```
    (The audit report `.ralph/audit.md` IS committed so the team can review it. Everything else is per-machine state.)
 
+#### Step 2.5: Verify the image builds
+
+Run `bin/ralph build` and watch it complete. This validates a lot at once: the base image is reachable; the vendored `Dockerfile` works against that base; node, claude-code, and the `ralph-tools` MCP server all install cleanly; the build context is well-formed.
+
+If the build fails, do not proceed silently. Work with the user interactively: read the error from the failing layer, identify the root cause, fix it, and retry. If the fix is a Dockerfile change that would help any future project (not just this one), also update `~/.claude/ralph/Dockerfile` so the next `/ralph init` doesn't repeat the failure.
+
+Iterate until `bin/ralph build` finishes cleanly. Do not move to Step 3 until the image is built.
+
 #### Step 3: Commit the init output, then point to `/ralph plan`
 
 Run `git status` and present the diff to the user. Ask them to commit before proceeding to `/ralph plan` — committing now means any future `/ralph init` (upgrade) produces a reviewable diff against this baseline, and any planner-time changes to `ralph.config.yaml` show up as their own diff. Suggest a single commit covering the init artifacts:

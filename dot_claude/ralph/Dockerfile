@@ -29,11 +29,13 @@ ENV DEBIAN_FRONTEND=noninteractive
 # ---- Minimum system packages for the loop ----
 # No gh / vim / nano / fzf / man-db / zsh — those are for interactive shells.
 # With Bash denied at the tool surface, the LLM has no use for them.
+# xz-utils is required to extract the Node.js tarball on slim base images.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       git \
       ca-certificates \
       curl \
       jq \
+      xz-utils \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ---- Two users ----
