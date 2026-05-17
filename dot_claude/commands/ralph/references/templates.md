@@ -84,7 +84,8 @@ sensitive_paths:
   - "config/credentials*.yml.enc"
   - ".git/config"
   - "ralph.config.yaml"                                  # the manifest itself
-  - "bin/ralph"                                          # the launcher
+  - "bin/ralph"                                          # the vendored launcher
+  - "bin/ralph.d/**"                                     # vendored Dockerfile, mask-env.js, ralph-tools/, etc.
   - ".ralph/**"                                          # masked dir, audit, sandbox-workspace itself
   - "PROMPT.md"                                          # loop instructions
   - "IMPLEMENTATIONPLAN.md"                              # mutated only via mark_* tools
@@ -406,14 +407,30 @@ Defense in depth: even if `--tools ""` somehow leaks a built-in tool through, th
 
 ## Launcher
 
-Lives at `~/.claude/ralph/ralph` (the authoritative copy, installed by the skill). Per-project `bin/ralph` is a one-line shim:
+The skill ships a reference copy at `~/.claude/ralph/ralph` plus supporting files in `~/.claude/ralph/`. Per-project `bin/ralph` is a **full vendored copy** of that launcher — not a shim — so the project does not depend on the skill installation at runtime.
 
-```bash
-#!/usr/bin/env bash
-exec "${RALPH_HOME:-$HOME/.claude/ralph}/ralph" "$@"
+`/ralph init` copies the launcher and its siblings into the project:
+
+```
+project/
+├── bin/
+│   ├── ralph                     # vendored launcher (full copy)
+│   └── ralph.d/                  # vendored support files
+│       ├── Dockerfile
+│       ├── init-firewall.sh
+│       ├── claude-settings.json
+│       ├── mask-env.js
+│       └── ralph-tools/          # MCP server source (no node_modules)
 ```
 
-The shim is listed in `sensitive_paths`; the loop cannot rewrite it. If it did, the human's next host invocation would still call `~/.claude/ralph/ralph` because `RALPH_HOME` is set externally — but better to prevent the rewrite at the MCP layer.
+The vendored `bin/ralph` is patched to default `RALPH_HOME` to `bin/ralph.d/`:
+
+```bash
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+RALPH_HOME="${RALPH_HOME:-$SCRIPT_DIR/ralph.d}"
+```
+
+`bin/ralph` and `bin/ralph.d/**` are listed in `sensitive_paths`; the loop cannot rewrite them through the MCP tool surface. Humans and the planner *can* edit them — that's intentional, so per-project customizations (e.g., a tweaked `Dockerfile`) are possible. Re-running `/ralph init` overwrites them; commit and merge any kept customizations before re-init.
 
 ### Launcher contract
 

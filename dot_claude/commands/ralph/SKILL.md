@@ -75,12 +75,25 @@ Read `references/templates.md` for the canonical templates. Generate:
    - `loop_allowed_tools: []` — empty by default.
    - `host_exposure: { docker_internal: false, db_port: null }` — empty by default. If you observe a `docker-compose.yml` or similar with a database service on the host network, **flag it for `/ralph plan`** in your handoff message; don't auto-enable.
 
-2. **`bin/ralph`** — a one-line shim:
+2. **`bin/ralph` + `bin/ralph.d/`** — vendor the full launcher and its supporting files into the project so the project does not depend on the skill installation at runtime. Re-running `/ralph init` later is the upgrade path; per-project customizations made between runs will be overwritten unless you commit and merge them yourself.
+
+   Copy the launcher and all supporting files from `~/.claude/ralph/` into the project:
+   - `~/.claude/ralph/ralph` → `bin/ralph`
+   - `~/.claude/ralph/Dockerfile` → `bin/ralph.d/Dockerfile`
+   - `~/.claude/ralph/init-firewall.sh` → `bin/ralph.d/init-firewall.sh`
+   - `~/.claude/ralph/claude-settings.json` → `bin/ralph.d/claude-settings.json`
+   - `~/.claude/ralph/mask-env.js` → `bin/ralph.d/mask-env.js`
+   - `~/.claude/ralph/ralph-tools/` → `bin/ralph.d/ralph-tools/` (excluding `node_modules`; `bin/ralph build` reinstalls inside the container)
+
+   Patch the vendored `bin/ralph` so `RALPH_HOME` defaults to the project-local copy instead of `$HOME/.claude/ralph`. Replace the `RALPH_HOME="${RALPH_HOME:-$HOME/.claude/ralph}"` line with:
    ```bash
-   #!/usr/bin/env bash
-   exec "${RALPH_HOME:-$HOME/.claude/ralph}/ralph" "$@"
+   SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+   RALPH_HOME="${RALPH_HOME:-$SCRIPT_DIR/ralph.d}"
    ```
-   Note that `bin/ralph` is in `sensitive_paths` — the loop cannot rewrite it.
+
+   **The vendored files are starting points, not final.** After copying, evaluate each for project fit. Common adjustments include: the `Dockerfile` base image (the default may be a Node image but a Ruby/Python/Go project will want its language image — though build args from the manifest already override this, so the in-Dockerfile default rarely matters); the `init-firewall.sh` `dns_resolver` if the project's network policy requires a specific resolver; the `claude-settings.json` if the project needs hooks the loop should *not* run. Most projects need no adjustments at init time — `/ralph plan` configures variation through the manifest rather than by editing these files.
+
+   `chmod +x bin/ralph`. Note `bin/ralph` and `bin/ralph.d/**` are in `sensitive_paths` — the loop cannot rewrite the launcher or any of the vendored support files. (Humans and the planner *can* edit them; that's intentional.)
 
 3. **`PROMPT.md`** — copy from `references/templates.md § Loop Protocol`. If the project already has a `PROMPT.md` from another use, **do not overwrite silently**: rename the existing file to `PROMPT.md.pre-ralph.bak` and warn the user. The same applies to `bin/ralph` and `.gitignore` edits: stage them, show the diff, get confirmation before writing.
 
