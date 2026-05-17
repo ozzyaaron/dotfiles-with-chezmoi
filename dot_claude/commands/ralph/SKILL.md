@@ -75,25 +75,15 @@ Read `references/templates.md` for the canonical templates. Generate:
    - `loop_allowed_tools: []` — empty by default.
    - `host_exposure: { docker_internal: false, db_port: null }` — empty by default. If you observe a `docker-compose.yml` or similar with a database service on the host network, **flag it for `/ralph plan`** in your handoff message; don't auto-enable.
 
-2. **`bin/ralph` + `bin/ralph.d/`** — vendor the full launcher and its supporting files into the project so the project does not depend on the skill installation at runtime. Re-running `/ralph init` later is the upgrade path; per-project customizations made between runs will be overwritten unless you commit and merge them yourself.
+2. **`bin/ralph` + `bin/ralph.d/`** — vendor the launcher and its supporting files into the project. The outcome to achieve: **after init, running `bin/ralph <subcommand>` from the project root must work without reading any file outside the project's directory**. The project is self-contained; the skill installation could be deleted and the loop would still run. Re-running `/ralph init` is the upgrade path; per-project customizations made between runs will be overwritten unless you commit and merge them yourself.
 
-   Copy the launcher and all supporting files from `~/.claude/ralph/` into the project:
-   - `~/.claude/ralph/ralph` → `bin/ralph`
-   - `~/.claude/ralph/Dockerfile` → `bin/ralph.d/Dockerfile`
-   - `~/.claude/ralph/init-firewall.sh` → `bin/ralph.d/init-firewall.sh`
-   - `~/.claude/ralph/claude-settings.json` → `bin/ralph.d/claude-settings.json`
-   - `~/.claude/ralph/mask-env.js` → `bin/ralph.d/mask-env.js`
-   - `~/.claude/ralph/ralph-tools/` → `bin/ralph.d/ralph-tools/` (excluding `node_modules`; `bin/ralph build` reinstalls inside the container)
+   Inspect `~/.claude/ralph/` to discover what the launcher needs (today: a launcher script plus `Dockerfile`, `init-firewall.sh`, `claude-settings.json`, `mask-env.js`, and a `ralph-tools/` MCP server source tree). Copy them under `bin/` — typically the launcher itself at `bin/ralph` and its siblings under `bin/ralph.d/` — but adapt to the project's existing conventions. Exclude any `node_modules`; container build re-installs.
 
-   Patch the vendored `bin/ralph` so `RALPH_HOME` defaults to the project-local copy instead of `$HOME/.claude/ralph`. Replace the `RALPH_HOME="${RALPH_HOME:-$HOME/.claude/ralph}"` line with:
-   ```bash
-   SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
-   RALPH_HOME="${RALPH_HOME:-$SCRIPT_DIR/ralph.d}"
-   ```
+   The launcher's reference copy defaults its support-file root (`RALPH_HOME`) to `$HOME/.claude/ralph`. Adjust the vendored copy so it instead resolves support files relative to the launcher's own location. Pick whatever idiomatic mechanism your shell tooling supports — the goal is no hard-coded path outside the project. Verify your edit by running `bin/ralph status` (or similar lightweight subcommand) and confirming it does not read from `$HOME/.claude/ralph`.
 
-   **The vendored files are starting points, not final.** After copying, evaluate each for project fit. Common adjustments include: the `Dockerfile` base image (the default may be a Node image but a Ruby/Python/Go project will want its language image — though build args from the manifest already override this, so the in-Dockerfile default rarely matters); the `init-firewall.sh` `dns_resolver` if the project's network policy requires a specific resolver; the `claude-settings.json` if the project needs hooks the loop should *not* run. Most projects need no adjustments at init time — `/ralph plan` configures variation through the manifest rather than by editing these files.
+   **The vendored files are starting points, not final.** Evaluate each for project fit. Most projects need no adjustments at init time — `/ralph plan` configures variation through the manifest rather than by editing these files. But check: the `Dockerfile` default base image, the `init-firewall.sh` DNS resolver, the `claude-settings.json` hook configuration.
 
-   `chmod +x bin/ralph`. Note `bin/ralph` and `bin/ralph.d/**` are in `sensitive_paths` — the loop cannot rewrite the launcher or any of the vendored support files. (Humans and the planner *can* edit them; that's intentional.)
+   Add `bin/ralph` and `bin/ralph.d/**` (or whatever paths you chose) to `sensitive_paths` so the loop cannot rewrite the launcher or its support files. Humans and the planner *can* edit them; that's intentional. `chmod +x` the launcher.
 
 3. **`PROMPT.md`** — copy from `references/templates.md § Loop Protocol`. If the project already has a `PROMPT.md` from another use, **do not overwrite silently**: rename the existing file to `PROMPT.md.pre-ralph.bak` and warn the user. The same applies to `bin/ralph` and `.gitignore` edits: stage them, show the diff, get confirmation before writing.
 
@@ -108,8 +98,6 @@ Read `references/templates.md` for the canonical templates. Generate:
    .ralph/build-context/
    ```
    (The audit report `.ralph/audit.md` IS committed so the team can review it. Everything else is per-machine state.)
-
-5. `chmod +x bin/ralph`.
 
 #### Step 3: Tell the user the next step
 
@@ -317,29 +305,18 @@ There is **no auto-relaunch of host `claude`** when the loop blocks. The Blocked
 
 ---
 
-## What changed from the old skill
-
-For users coming from the old Ruby-specific ralph skill:
-
-- **Stack-agnostic.** No longer assumes Ruby/Rails; works with Node, Python, Go, anything.
-- **No Bash in the loop.** The MCP `ralph_tools` is the only tool surface. The loop can't `gem install evil-gem` or `curl evil.com`.
-- **`ralph.config.yaml` replaces ad-hoc per-project `bin/ralph` customizations.** Lint/test/install commands live in the manifest, not in the launcher.
-- **Default-deny egress.** The firewall starts with just `api.anthropic.com`; everything else is opt-in.
-- **Sensitive files are masked at host-mount level.** The loop sees fake `.env` content with real variable names. The real file never enters the container.
-- **`bin/ralph plan` is gone.** Planning runs on the host `claude` session, not in the container. This is much more capable (full tool surface) and avoids the BLOCKED-resume host-claude escape.
-- **`bin/ralph audit` is required.** No loop run without a current audit on record.
-- **Worktree support is dropped in v1.** Require regular `.git`-directory repos.
-
-See `references/security.md` for the full threat model and verification procedure.
-
 ## Where everything lives
 
-- `~/.claude/ralph/ralph` — the launcher (authoritative; project's `bin/ralph` is a shim).
+The skill ships reference copies that `/ralph init` vendors into each project:
+
+- `~/.claude/ralph/ralph` — launcher (project receives a copy at `bin/ralph`).
 - `~/.claude/ralph/Dockerfile` — base image, parameterized by manifest.
-- `~/.claude/ralph/init-firewall.sh` — runs in the init container.
+- `~/.claude/ralph/init-firewall.sh` — runs in the privileged init container.
 - `~/.claude/ralph/claude-settings.json` — bind-mounted ro for the loop.
 - `~/.claude/ralph/mask-env.js` — deterministic helper to generate masked sensitive files.
-- `~/.claude/ralph/ralph-tools/` — the MCP server source (baked into the image at build).
+- `~/.claude/ralph/ralph-tools/` — MCP server source (baked into the image at build).
 - `~/.claude/commands/ralph/SKILL.md` — this file.
 - `~/.claude/commands/ralph/references/templates.md` — canonical templates for generated files.
 - `~/.claude/commands/ralph/references/security.md` — threat model + audit checklist.
+
+See `references/security.md` for the full threat model and verification procedure.
