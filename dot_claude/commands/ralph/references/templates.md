@@ -1,6 +1,8 @@
 # Ralph Template Reference
 
-Complete templates for every file `/ralph init` generates in the new secure-by-design model. Stack-agnostic — the planner customizes per-project via the `ralph.config.yaml` manifest, not by editing the Dockerfile or launcher directly.
+Reference templates for every file `/ralph init` and `/ralph plan` produce. **These are starting points, not canonical outputs.** For each project, evaluate every section against the project's actual needs — language base image, lockfile, secret surface, network endpoints, MCP servers — and adapt accordingly. The manifest (`ralph.config.yaml`) is where most per-project variation lives; the Dockerfile, launcher, and firewall script accept that variation through build args and config reads, so you rarely need to edit them.
+
+When a template includes a `{{PLACEHOLDER}}`, replace it with a project-specific value. When a template uses a concrete value (e.g., `node:20-bookworm`), confirm it matches the project's stack and swap if not.
 
 ## Table of Contents
 
@@ -190,17 +192,18 @@ RUN ARCH=$(dpkg --print-architecture) && \
 ARG CLAUDE_CODE_VERSION={{CLAUDE_CODE_VERSION}}          # e.g. "2.1.141"
 RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
 
-# ---- ralph-tools MCP server (pinned + checksummed) ----
-# Source is published as a release tarball; never copied from the project workspace.
-ARG RALPH_TOOLS_VERSION={{RALPH_TOOLS_VERSION}}          # e.g. "0.1.0"
-ARG RALPH_TOOLS_SHA256={{RALPH_TOOLS_SHA256}}
-RUN curl -fsSL "https://github.com/<org>/ralph-tools/releases/download/v${RALPH_TOOLS_VERSION}/ralph-tools-${RALPH_TOOLS_VERSION}.tgz" -o /tmp/ralph-tools.tgz && \
-    echo "${RALPH_TOOLS_SHA256}  /tmp/ralph-tools.tgz" | sha256sum -c - && \
-    mkdir -p /opt/ralph-tools && \
-    tar -xzf /tmp/ralph-tools.tgz -C /opt/ralph-tools --strip-components=1 && \
-    rm /tmp/ralph-tools.tgz && \
+# ---- ralph-tools MCP server ----
+# The launcher stages the MCP server source into the build context as
+# `ralph-tools/` (today: from `~/.claude/ralph/ralph-tools/`; in a published
+# distribution this could be a pinned + checksummed release tarball fetched
+# at build time instead — adapt for your install).
+# Root-owned and write-stripped so the `ralph` user cannot modify it at runtime.
+COPY ralph-tools/ /opt/ralph-tools/
+RUN cd /opt/ralph-tools && \
+    npm install --omit=dev --no-audit --no-fund && \
     chown -R root:root /opt/ralph-tools && \
-    chmod -R a-w /opt/ralph-tools && \
+    find /opt/ralph-tools -type f -exec chmod a-w {} + && \
+    find /opt/ralph-tools -type d -exec chmod a-w {} + && \
     chmod 0755 /opt/ralph-tools/bin/ralph-tools
 
 # ---- Project-declared MCP servers (pinned + checksummed via build args) ----
@@ -428,6 +431,7 @@ ralph [N]     run the loop up to N iterations (or unlimited if omitted), [--budg
 mask-env      regenerate .ralph/masked/ from real $ROOT/.env etc. (deterministic, no LLM)
 progress      print IMPLEMENTATIONPLAN.md progress summary
 sync          fetch commits from .ralph/sandbox-workspace back into the real workspace
+test          run the ralph-tools MCP server's unit tests (host-side; auto-installs deps)
 ```
 
 ### Workspace strategy
@@ -486,6 +490,8 @@ built-in tools, NO WebFetch, NO WebSearch. Everything you do flows through the
 - `mark_complete(bullet_id)` — marks an `IMPLEMENTATIONPLAN.md` bullet `[x]`.
 - `mark_blocked(bullet_id, reason)` — moves a bullet into `## Blocked` with reason.
 - `mark_all_done()` — emit when no bullets remain. Loop terminates.
+
+`bullet_id` is the kebab-case slug from the bullet's `[id:<slug>]` marker (e.g., for `- [ ] [id:add-pagination] Convert messages field…`, the id is `"add-pagination"`). If a bullet has no explicit marker, the server falls back to matching against the bullet's full normalized text — fragile, prefer explicit ids.
 
 **Spec/research:**
 - (Project-dependent — manifest may add `context7`, `postgres-readonly`, etc.)

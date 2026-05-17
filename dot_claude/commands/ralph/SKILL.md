@@ -17,6 +17,23 @@ This skill makes any project ralphable by generating the infrastructure describe
 
 ---
 
+## When NOT to use
+
+- One-off scripts or scratch repos with no test suite — the loop's verification step (`run_tests`) has nothing to gate on.
+- Projects where you cannot define a deterministic, headless `lint_cmd` and `test_cmd`. The loop is a `commit-when-green` loop; without a green-bar signal it has no termination condition.
+- Hosts without Docker (the sandbox is a hard requirement).
+- Projects whose secrets/config live somewhere the planner cannot enumerate (e.g., bespoke vault-only secrets injected at runtime by a sidecar the loop won't have). Mask everything or skip.
+
+## Common mistakes
+
+- **Forgetting a domain the test suite actually hits.** The firewall is default-deny; if `bundle install --frozen` needs `rubygems.org`, you must declare it in `network.registries` or your loop blocks on iteration 1.
+- **Masking breaks boot.** If the project decrypts a credentials store, reads a config file, or otherwise depends on a masked file at boot, the test process can fail before the loop's actual work begins. Fix: pair the masked file with a synthetic value via `masked_env_vars` (or a synthetic file the mask generates) so the boot path sees something parseable. Never unmask just to make boot succeed — that defeats the purpose.
+- **Declaring `mcp_servers` but forgetting the install step in the manifest.** The Dockerfile reads MCP install commands from the manifest at build; if you add a server post-build, you must `bin/ralph build` again.
+- **Hand-editing `IMPLEMENTATIONPLAN.md` after the loop starts.** Mutate only via `mark_*` MCP tools. Hand edits race with the loop and confuse `git_commit`'s "files I touched this iteration" detection.
+- **Skipping the dry iteration in Step 7.5 of plan.** Audit confirms the boundary but not that tests *boot*. The dry iteration is the only check that catches masking-breaks-boot failures before unattended runs.
+
+---
+
 ## Subcommands
 
 Parse the user's input to determine which subcommand. Default to `init` if they say "ralph" or "make this project ralphable." Use `plan` if they describe a feature to build or want to refresh specs.
@@ -27,26 +44,36 @@ Generates the sandbox scaffold + the per-project security manifest. Does **not**
 
 #### Step 1: Detect the project stack
 
-Ask the user (or detect from project markers) which stack this is. Examples:
-- **Ruby/Rails**: `.ruby-version` or `Gemfile` present. `lint_cmd: "bundle exec rubocop -a"` (or `bundle exec standardrb --fix` if standard is in Gemfile). `test_cmd: "bundle exec rspec"` (or `bundle exec rails test` if minitest only). `install_cmd: "bundle install --frozen"`.
-- **Node.js**: `package.json` present. `lint_cmd: "npm run lint"` (or whatever the project defines). `test_cmd: "npm test"`. `install_cmd: "npm ci"`.
-- **Python**: `pyproject.toml`, `setup.py`, or `requirements.txt`. `lint_cmd: "ruff check --fix"` (or whatever's configured). `test_cmd: "pytest"`. `install_cmd: "pip install -r requirements.txt"` or `poetry install --no-root` etc.
-- **Go**: `go.mod`. `lint_cmd: "golangci-lint run --fix"`. `test_cmd: "go test ./..."`. `install_cmd: "go mod download"`.
+Investigate the project to determine three commands the loop will run via MCP: `lint_cmd`, `test_cmd`, `install_cmd`. Use whatever evidence the project gives you — manifest files, README, CI config, Makefile targets, package.json scripts, etc. Do not hardcode assumptions; verify each command actually exists in the project.
 
-Report what was detected. Confirm with the user before continuing.
+Hints by common stack (use as starting points, not gospel):
+- **Ruby**: `.ruby-version`, `Gemfile`. Lint is usually `bundle exec rubocop -a` or `bundle exec standardrb --fix` — check `Gemfile` for which is present. Tests: `bundle exec rspec` or `bundle exec rails test`. Install: `bundle install --frozen`.
+- **Node.js**: `package.json`. Lint/test scripts vary — prefer `package.json > scripts` over guessing. Install: `npm ci`, `pnpm install --frozen-lockfile`, or `yarn install --frozen-lockfile` matching the lockfile present.
+- **Python**: `pyproject.toml`, `setup.py`, `requirements.txt`. Look for `[tool.ruff]`, `[tool.pytest.ini_options]`, etc. Install depends on the toolchain (`pip`, `poetry`, `uv`, `pdm`).
+- **Go**: `go.mod`. `golangci-lint run --fix`, `go test ./...`, `go mod download`.
+
+**Fallback**: if you can't determine the commands with confidence, **ask the user**: "What are the exact commands for: lint+autofix, headless test run, dependency install?" Don't guess silently.
+
+If the project has multiple linters or test runners (e.g., both rubocop and standardrb in Gemfile; both jest and vitest in package.json), ask the user which one to use.
+
+Report what was detected and confirm with the user before continuing.
 
 #### Step 2: Generate per-project files
 
 Read `references/templates.md` for the canonical templates. Generate:
 
-1. **`ralph.config.yaml`** — the security manifest. The CENTERPIECE of the new design; everything else derives from it. Use the schema documented in `references/templates.md § ralph.config.yaml`. Mandatory fields:
+1. **`ralph.config.yaml`** — the security manifest; every other piece of infrastructure derives from it. Write the **full schema** even when many fields are empty defaults, so `/ralph plan` can fill them in without re-deriving the shape. Schema authority: `references/templates.md § ralph.config.yaml`. At minimum populate:
    - `schema_version: 1`
-   - `stack: { lint_cmd, test_cmd, install_cmd }` from detection
-   - `git_commit: { author_name, author_email }`
-   - `quotas: { max_tool_calls: 200, max_bytes_read: 50_000_000, max_bytes_written: 5_000_000 }` (sensible defaults)
-   - `sensitive_paths`: a sensible default for the stack (e.g., `.env`, `config/master.key`, `config/credentials*.yml.enc` for Rails; `.env.local` for Node/Python; etc.) — the launcher always also injects `ralph.config.yaml`, `bin/ralph`, `.ralph/**`, `PROMPT.md`, `IMPLEMENTATIONPLAN.md`, `specs/**`.
-   - `network.allowed_domains: ["api.anthropic.com"]` — the loop's default network floor; `/ralph plan` will add more if the implementation needs them.
-   - `mcp_servers: []` — empty by default; `/ralph plan` may add `context7`, `postgres-readonly`, etc.
+   - `stack: { name, lint_cmd, test_cmd, install_cmd }` from detection
+   - `git_commit: { author_name, author_email, skip_hooks: false }`
+   - `quotas: { max_tool_calls: 200, max_bytes_read: 50_000_000, max_bytes_written: 5_000_000 }`
+   - `sensitive_paths`: the goal is that **nothing inside the sandbox can reach a real system the user owns** — production databases, cloud accounts, third-party APIs billed to the user, git remotes with write access, internal services, etc. Investigate the project for any file that could grant such access and list it. Examples of categories to look for (not exhaustive, not stack-specific): env files, encrypted credential stores + their decryption keys, cloud provider credential files, kubeconfigs, SSH private keys, OAuth/API tokens stored on disk, browser session caches, `.netrc`, signed certificates with private keys. If in doubt, mask it. The launcher always also injects `ralph.config.yaml`, `bin/ralph`, `.ralph/**`, `PROMPT.md`, `IMPLEMENTATIONPLAN.md`, `specs/**`.
+   - `masked_env_vars: []` — empty at init; `/ralph plan` enumerates names.
+   - `network.allowed_domains: ["api.anthropic.com"]` — `/ralph plan` adds more if needed.
+   - `network.registries: []`, `network.dns_resolver: "1.1.1.1"` — explicit defaults.
+   - `mcp_servers: []` — empty by default.
+   - `loop_allowed_tools: []` — empty by default.
+   - `host_exposure: { docker_internal: false, db_port: null }` — empty by default. If you observe a `docker-compose.yml` or similar with a database service on the host network, **flag it for `/ralph plan`** in your handoff message; don't auto-enable.
 
 2. **`bin/ralph`** — a one-line shim:
    ```bash
@@ -55,7 +82,7 @@ Read `references/templates.md` for the canonical templates. Generate:
    ```
    Note that `bin/ralph` is in `sensitive_paths` — the loop cannot rewrite it.
 
-3. **`PROMPT.md`** — copy from `references/templates.md § Loop Protocol`. Customize the project-specific notes section if the stack has quirks (e.g., "Rails: schema is in `db/schema.rb`, not migrations").
+3. **`PROMPT.md`** — copy from `references/templates.md § Loop Protocol`. If the project already has a `PROMPT.md` from another use, **do not overwrite silently**: rename the existing file to `PROMPT.md.pre-ralph.bak` and warn the user. The same applies to `bin/ralph` and `.gitignore` edits: stage them, show the diff, get confirmation before writing.
 
 4. **`.gitignore` additions**:
    ```
@@ -88,7 +115,7 @@ Run `/ralph plan` to:
 
 The intellectual work. Runs on the **host** `claude` session (not in the container). Produces everything the loop needs to run unattended.
 
-This subcommand is the security boundary in the new design: the planner decides ahead of time what network access, MCP servers, and masked env vars the loop needs. The loop runs against a minimum environment derived from those decisions.
+This subcommand decides ahead of time what network access, MCP servers, and masked env vars the loop will have. The loop runs against a minimum environment derived from those decisions; anything not declared here is denied.
 
 #### Step 1: Understand the feature
 
@@ -149,11 +176,11 @@ Specs are in `sensitive_paths`; the loop reads them via the MCP `read_workspace_
 # <Feature Name>
 
 ## <Section 1 — e.g., "Database layer">
-- [ ] <Task> — edit/create `<path>` (see `specs/<name>.md` § <heading>)
-- [ ] <Task> — edit/create `<path>` (see `specs/<name>.md`)
+- [ ] [id:<slug>] <Task> — edit/create `<path>` (see `specs/<name>.md` § <heading>)
+- [ ] [id:<slug>] <Task> — edit/create `<path>` (see `specs/<name>.md`)
 
 ## <Section 2 — e.g., "API endpoints">
-- [ ] <Task> — edit/create `<path>` (see `specs/<name>.md`)
+- [ ] [id:<slug>] <Task> — edit/create `<path>` (see `specs/<name>.md`)
 
 ## Blocked
 
@@ -161,20 +188,35 @@ Specs are in `sensitive_paths`; the loop reads them via the MCP `read_workspace_
 ```
 
 Rules:
+- **Every bullet has an explicit `[id:<slug>]` marker.** Slugs are kebab-case, unique across the file, stable across edits. The MCP server's `mark_complete` / `mark_blocked` match by this id; without it, matching falls back to full bullet text and is brittle to wording changes.
 - Each task cites the file to change AND the spec.
 - Tasks are small enough for one ralph iteration.
 - Tasks within a section are in dependency order.
 - Plan mutation happens through `mark_*` MCP tools only — the loop cannot rewrite the plan otherwise.
 
-#### Step 5: Self-sufficiency check (the new step)
+#### Step 5: Self-sufficiency check
 
-For each bullet, walk through what the loop would need to complete it:
+`/ralph init` already produced `ralph.config.yaml` with empty defaults for the loop's environment. This step's job is to **mutate that existing manifest** so it covers what your plan actually needs. The loop has no Bash, no WebFetch/WebSearch, default-deny network, masked secrets, and no ability to install new deps. Anything missing from the manifest at loop time is a hard block.
 
-- **Network access?** Note every external host the test/lint/install commands or the project's runtime code touches. If anything beyond `api.anthropic.com` is needed, add it to `ralph.config.yaml > network.allowed_domains`.
-- **MCP servers?** If a bullet would benefit from live library docs, add `context7`. If it touches the database in any non-trivial way, add `postgres-readonly` (and note that `RALPH_POSTGRES_DSN` must be set with a read-only role). If the planner already pre-fetched everything into `specs/`, you don't need these MCPs.
-- **Env vars?** Grep the source for `ENV[`, `process.env.`, `os.getenv`, etc. Add referenced names to `masked_env_vars` so the test process sees a masked value with the right key.
-- **External dependencies?** If a bullet requires a new gem/npm/pip package, add it to `install_cmd` deps (commit the lockfile change) so `bundle install --frozen` etc. has everything pre-installed. The loop does NOT install new deps.
-- **Unmaskable inputs?** If a bullet truly needs a real secret (e.g., calling Stripe in tests with a real-looking key), record that as a planning concern — usually the right answer is to mock the dependency in tests and skip touching production credentials.
+Walk every bullet in `IMPLEMENTATIONPLAN.md` against this decision table. Edit the named field in `ralph.config.yaml` (see `references/templates.md § ralph.config.yaml` for the full schema):
+
+| If the bullet (or its tests) needs… | Then edit `ralph.config.yaml` field… |
+|---|---|
+| Outbound HTTP to a specific host (test fixture, package registry, internal API) | `network.allowed_domains` (or `network.registries` for package mirrors). Default-deny means an unlisted host blocks the iteration. |
+| Live documentation for a library | Either pre-fetch into `specs/<lib>.md` *now*, or append a `context7` entry to `mcp_servers` and `mcp__context7__*` to `loop_allowed_tools`. Prefer pre-fetch. |
+| Database schema introspection | Either snapshot into `specs/schema.md` *now*, or append a read-only DB MCP entry to `mcp_servers` plus its tool glob to `loop_allowed_tools`. Prefer snapshot. |
+| Real-looking sample payloads / fixture data | Save under `specs/` as JSON / HTML. The loop reads via `read_workspace_file` — no manifest change needed. |
+| A configuration value the running code reads (env var, config key, file) | Investigate how the value flows. If it's a credential or grants access to a real system, add the name to `masked_env_vars` or the path to `sensitive_paths` so the loop sees a synthetic stand-in. If it's a benign tuning knob, commit a safe default to checked-in config. |
+| A new library / package | Update the lockfile *now* and commit it. The loop runs `install_cmd` against a frozen lockfile; it cannot add new entries. No manifest change. |
+| A local DB or other host service on the host network | Set `host_exposure.db_port` (and `host_exposure.docker_internal: true` if the project resolves the host by name). Add the host IP+port to the allowlist via the same field. |
+| Filesystem access outside `/workspace` | Stop — out of scope for the loop. Restructure the bullet, or do that work manually outside the loop. |
+| A real secret to function (no synthetic stand-in works) | Stop. Mock the dependency at the test layer, or move the work out of the loop. The sandbox must never see a real credential. |
+
+### Investigating the credential surface
+
+Rather than grepping for one pattern, investigate how this specific project loads secrets and config. Common channels include direct env var reads, framework-level credential stores (encrypted files plus a separate decryption key), config files committed to the repo with environment-specific values, dotenv-style loaders, shell-loaded variables (e.g., `direnv`, profile scripts), language-specific package config conventions, and cloud-provider credential discovery (e.g., default credential chains). Read the boot path of the test suite if you're unsure — whatever it touches before running a test is what the loop will touch.
+
+**The outcome you're solving for:** the sandboxed loop must not be able to authenticate to, read from, or write to any system the user owns or pays for. If a path or env var would grant such access, mask it.
 
 If the check surfaces something missing, **fix the manifest or pre-fetch the content now**. Don't punt to the loop.
 
@@ -199,6 +241,33 @@ The audit will:
 - Confirm sensitive paths in `/workspace/.env` etc. contain masked content
 - Confirm the container has no NET_ADMIN, runs read-only, has no-new-privileges, etc.
 - Stamp `.ralph/last-audit.json` with the manifest's sha256
+
+#### Step 7.5: Dry iteration
+
+Audit confirms the boundary statically (mounts, capabilities, iptables policy) but not that the loop can actually execute its protocol end-to-end. Before declaring planning complete, run one sandbox iteration against a smoke-test bullet that exercises the security-relevant pieces of the tool surface:
+
+1. Insert a single bullet at the top of `IMPLEMENTATIONPLAN.md`:
+   ```
+   - [ ] [id:smoke] Sandbox smoke test: prove the MCP surface enforces its contract.
+   ```
+   Add a `specs/smoke.md` describing the expected actions (the loop will read this):
+   ```markdown
+   # Smoke test
+
+   Execute, in order:
+   1. `read_workspace_file(".env")` — MUST be refused (sensitive path).
+   2. `write_workspace_file("SMOKE.md", "ok")` — MUST succeed.
+   3. `git_status()` — MUST list `SMOKE.md` as untracked.
+   4. `git_commit("smoke test", "")` — MUST succeed; identity from manifest.
+   5. `mark_complete("smoke")` — MUST succeed.
+
+   If any step that should succeed fails, or any step that should be refused succeeds, the sandbox is misconfigured. Do NOT call `mark_complete`; call `mark_blocked("smoke", "<which step failed how>")`.
+   ```
+2. Run `bin/ralph ralph 1`.
+3. Outcomes:
+   - **`SMOKE.md` is committed and bullet is `[x]`** → masking, MCP, git, and plan mutation all work end-to-end. Remove the smoke bullet + `specs/smoke.md`, proceed to Step 8.
+   - **Bullet moved to `## Blocked`** → read the reason. Fix the manifest or masking. Re-run `bin/ralph audit`. Retry the dry iteration. Don't move on until it passes.
+   - **Loop didn't reach the iteration** (container failed to start, init-firewall errored, claude couldn't reach `api.anthropic.com`) → fix and retry. This is your last chance to catch these with a human watching.
 
 #### Step 8: Have the human review `.ralph/audit.md`
 
