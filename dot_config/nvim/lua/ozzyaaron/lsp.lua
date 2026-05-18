@@ -43,6 +43,11 @@ vim.api.nvim_create_autocmd({ 'BufReadPost', 'BufNewFile' }, {
     vim.lsp.config('*', { capabilities = blink_capabilities })
 
     -- Enable LSP servers (configs loaded from lsp/*.lua)
+    vim.lsp.config('ruby_lsp', {
+      cmd = { 'bundle', 'exec', 'ruby-lsp' },
+      filetypes = { 'ruby', 'eruby' },
+      root_markers = { 'Gemfile', '.ruby-version', '.git' },
+    })
     vim.lsp.enable('ruby_lsp')
     vim.lsp.enable('gopls')
     vim.lsp.enable('ts_ls')

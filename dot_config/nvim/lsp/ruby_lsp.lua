@@ -1,5 +1,7 @@
 return {
   cmd = { 'bundle', 'exec', 'ruby-lsp' },
+  filetypes = { 'ruby', 'eruby' },
+  root_markers = { 'Gemfile', '.ruby-version', '.git' },
   init_options = {
     enabledFeatures = {
       documentHighlights = false,
