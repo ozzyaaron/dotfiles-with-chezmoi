@@ -125,12 +125,6 @@ add_part() {
     fi
 }
 
-# Session name (if set via /rename)
-[ -n "$session_name" ] && add_part "🏷️ $session_name"
-
-# Agent name (if using --agent)
-[ -n "$agent_name" ] && add_part "🤖 $agent_name"
-
 # Repository and branch
 if [ -n "$repo_name" ] && [ -n "$git_branch" ]; then
     add_part "🌿 ${repo_name}:${git_branch}"
