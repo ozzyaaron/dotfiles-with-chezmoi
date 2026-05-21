@@ -26,6 +26,34 @@ sso_account_id = 228087463429
 sso_role_name = JanePOSEngineerProdAccess
 region = us-east-1
 output = json
+[profile CoreDemoAccount]
+sso_start_url = https://d-90676c205e.awsapps.com/start
+sso_region = us-east-1
+sso_account_id = 471524451598
+sso_role_name = JaneEngineerNonProdAccess
+region = us-east-1
+output = json
+[profile CoreEdgeAccount]
+sso_start_url = https://d-90676c205e.awsapps.com/start
+sso_region = us-east-1
+sso_account_id = 150790210796
+sso_role_name = JaneEngineerNonProdAccess
+region = us-east-1
+output = json
+[profile CoreEdge2Account]
+sso_start_url = https://d-90676c205e.awsapps.com/start
+sso_region = us-east-1
+sso_account_id = 654654566263
+sso_role_name = JaneEngineerNonProdAccess
+region = us-east-1
+output = json
+[profile CoreSandboxAccount]
+sso_start_url = https://d-90676c205e.awsapps.com/start
+sso_region = us-east-1
+sso_account_id = 911017275089
+sso_role_name = JaneEngineerSandboxAccess
+region = us-east-1
+output = json
 [profile CoreStagingAccount]
 sso_start_url = https://d-90676c205e.awsapps.com/start
 sso_region = us-east-1
